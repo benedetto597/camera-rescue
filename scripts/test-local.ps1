@@ -20,6 +20,8 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $PureSources = @(
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraConfig.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SamsungModelDatabase.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SensorHealth.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\DiscoveredSensor.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SamsungModelDatabaseTest.java")
 )

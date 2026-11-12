@@ -13,7 +13,26 @@ public final class SamsungModelDatabaseTest {
         testNoteAndFoldIdentification();
         testSeriesAIdentification();
         testUnknownDeviceFallback();
-        System.out.println("PASS: Todas las pruebas unitarias de SamsungModelDatabaseTest finalizaron con exito (7/7).");
+        testDiscoveredSensorFormatting();
+        System.out.println("PASS: Todas las pruebas unitarias de SamsungModelDatabaseTest finalizaron con exito (8/8).");
+    }
+
+    private static void testDiscoveredSensorFormatting() {
+        DiscoveredSensor sensor = new DiscoveredSensor(
+                "56",
+                "Trasera Principal 1x",
+                0,
+                4080,
+                3060,
+                5.4f,
+                1.8f,
+                SensorHealth.HEALTHY,
+                "OK - Stream verificado"
+        );
+        assertEquals("56", sensor.id, "ID de sensor incorrecto");
+        assertEquals("12.5 MP", sensor.getResolutionMegaPixels(), "Calculo de MP incorrecto");
+        assertEquals("🟢 Operativo", sensor.health.displayName, "Badge de salud incorrecto");
+        assertTrue(sensor.getFormattedSummary().contains("Trasera Principal 1x"), "Resumen debe contener el nombre");
     }
 
     private static void testS23PlusIdentification() {

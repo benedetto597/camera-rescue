@@ -1,0 +1,23 @@
+# Archivos de compilación Android / Gradle
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+*.idsig
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claves privadas de firma (nunca subir al repositorio)
+*.jks
+*.keystore
+!debug.keystore
+
+# Scratch e infraestructura de ejecución
+.superpowers/
+
+# Documentos confidenciales de negocio y monetización (Play Store)
+MONETIZATION_PLAN.md
+*monetization*
+*monetizacion*

@@ -1,8 +1,10 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$Javac = "C:\Users\bened\.gemini\antigravity\brain\91cc6e57-4416-4b56-a368-6fa258b5dd9b\scratch\tools\jdk\jdk-17.0.21.0.2+1\bin\javac.exe"
-$Java = "C:\Users\bened\.gemini\antigravity\brain\91cc6e57-4416-4b56-a368-6fa258b5dd9b\scratch\tools\jdk\jdk-17.0.21.0.2+1\bin\java.exe"
+$ToolsRoot = "C:\Users\bened\.gemini\antigravity\brain\91cc6e57-4416-4b56-a368-6fa258b5dd9b\scratch\tools"
+$Javac = Join-Path $ToolsRoot "jdk\jdk-17.0.21.0.2+1\bin\javac.exe"
+$Java = Join-Path $ToolsRoot "jdk\jdk-17.0.21.0.2+1\bin\java.exe"
+$AndroidJar = Join-Path $ToolsRoot "sdk\platforms\android-34\android.jar"
 
 if (-not (Test-Path $Javac)) {
     $Javac = "javac"
@@ -15,10 +17,20 @@ if (Test-Path $OutDir) {
 }
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-& $Javac -encoding UTF-8 -d $OutDir `
-    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraConfig.java") `
-    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java")
-if ($LASTEXITCODE -ne 0) { throw "Fallo compilando CameraConfigTest" }
+$PureSources = @(
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraConfig.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SamsungModelDatabase.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SamsungModelDatabaseTest.java")
+)
 
+& $Javac -encoding UTF-8 -d $OutDir $PureSources
+if ($LASTEXITCODE -ne 0) { throw "Fallo compilando pruebas unitarias" }
+
+Write-Host "Ejecutando CameraConfigTest..."
 & $Java -cp $OutDir com.s23plus.camera.CameraConfigTest
 if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando CameraConfigTest" }
+
+Write-Host "Ejecutando SamsungModelDatabaseTest..."
+& $Java -cp $OutDir com.s23plus.camera.SamsungModelDatabaseTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando SamsungModelDatabaseTest" }

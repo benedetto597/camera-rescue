@@ -12,8 +12,8 @@ package com.s23plus.camera;
 public final class CameraConfig {
 
     /** Identidad y versión oficial de la aplicación. */
-    public static final String APP_TITLE = "S23+ Camera Rescue";
-    public static final String APP_VERSION = "1.0.1";
+    public static final String APP_TITLE = "Samsung Camera Rescue";
+    public static final String APP_VERSION = "1.2.0";
 
     /** Nombres cortos para los botones principales de la interfaz moderna (v1.0.1). */
     public static final String BTN_FRONT_SHUTTER_SHORT = "Tomar Selfie";

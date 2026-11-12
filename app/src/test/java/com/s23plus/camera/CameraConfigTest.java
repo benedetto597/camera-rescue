@@ -17,8 +17,8 @@ public final class CameraConfigTest {
     }
 
     private static void testAppBrandingAndShortLabels() {
-        assertEquals("S23+ Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
-        assertEquals("1.0.1", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.0.1");
+        assertEquals("Samsung Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
+        assertEquals("1.2.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.2.0");
         assertTrue(CameraConfig.BTN_REAR_PRO_SHORT.length() <= 24, "Nombre corto de boton Pro debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_QR_SHORT.length() <= 26, "Nombre corto de boton QR debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_VIDEO_SHORT.length() <= 24, "Nombre corto de boton Video debe ser conciso");

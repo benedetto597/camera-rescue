@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.util.TypedValue;
@@ -23,14 +24,16 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.List;
+
 /**
- * Actividad principal de S23+ Camera Rescue (v1.0.1).
+ * Actividad principal de Samsung Camera Rescue (v1.2.0).
  *
- * Interfaz moderna oscura con:
- * 1. Visor Camera2 en vivo para las camaras frontales ("1" 12 MP y "3" 8.6 MP) con controles cortos
- *    y ficha tecnica desplegable (▾/▴).
- * 2. Tarjetas de accion para Camara Trasera con nombres cortos y boton de flecha (▾/▴) que despliega
- *    la descripcion tecnica de cada modo de rescate (Modo Pro ISP, Escaner QR + HUD, y Video Pro).
+ * Incluye:
+ * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase).
+ * 2. Escáner de sensores on-device no bloqueante (SensorScanner) con reporte de salud visual.
+ * 3. Visor Camera2 en vivo para sensores frontales funcionales (ID 1 e ID 3).
+ * 4. Lanzadores directos a Modos Pro ISP y Escáner QR con HUD flotante para sensores traseros independientes (device 56 y 52).
  */
 public final class MainActivity extends Activity implements FrontCameraController.StatusListener {
 
@@ -42,12 +45,23 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private Button switchLensButton;
     private FrontCameraController frontCameraController;
 
+    // Componentes del motor de diagnóstico v1.2.0
+    private SamsungModelDatabase.ModelProfile modelProfile;
+    private SensorScanner sensorScanner;
+    private TextView scanStatusText;
+    private LinearLayout scanResultsContainer;
+    private Button runScanButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setShowWhenLocked(true);
         setTurnScreenOn(true);
+
+        modelProfile = SamsungModelDatabase.lookup(Build.MODEL);
+        sensorScanner = new SensorScanner(this);
         frontCameraController = new FrontCameraController(this, this);
+
         buildModernUserInterface();
     }
 
@@ -61,7 +75,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         int padH = dpToPx(16);
         root.setPadding(padH, dpToPx(14), padH, dpToPx(20));
 
-        // 1. Encabezado Moderno con Insignia de Version
+        // 1. Encabezado Moderno con Insignia de Versión
         LinearLayout headerRow = new LinearLayout(this);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -75,12 +89,12 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         TextView titleView = new TextView(this);
         titleView.setText(CameraConfig.APP_TITLE);
         titleView.setTextColor(Color.parseColor("#F8FAFC"));
-        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 21);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
         titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         titleColumn.addView(titleView);
 
         TextView subtitleView = new TextView(this);
-        subtitleView.setText("Bypass de Hardware · Sensores 1x, 3x y Frontales");
+        subtitleView.setText("Rescate de Sensores · " + modelProfile.marketingName);
         subtitleView.setTextColor(Color.parseColor("#64748B"));
         subtitleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         titleColumn.addView(subtitleView);
@@ -98,7 +112,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
         // Banner de estado en vivo
         statusBanner = new TextView(this);
-        statusBanner.setText("● Inicializando visor frontal...");
+        statusBanner.setText("● Inicializando visor...");
         statusBanner.setTextColor(Color.parseColor("#34D399"));
         statusBanner.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         statusBanner.setPadding(dpToPx(12), dpToPx(7), dpToPx(12), dpToPx(7));
@@ -110,7 +124,10 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         statusBanner.setLayoutParams(statusLp);
         root.addView(statusBanner);
 
-        // 2. Tarjeta del Visor Frontal Camera2
+        // 2. Tarjeta del Motor de Diagnóstico y Escáner (v1.2.0)
+        root.addView(buildDiagnosticCard());
+
+        // 3. Tarjeta del Visor Frontal Camera2
         LinearLayout frontCard = new LinearLayout(this);
         frontCard.setOrientation(LinearLayout.VERTICAL);
         int cardPad = dpToPx(10);
@@ -119,7 +136,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
         FrameLayout previewFrame = new FrameLayout(this);
         LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(290));
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(280));
         previewFrame.setLayoutParams(previewParams);
         previewFrame.setBackground(createRoundedDrawable("#090D16", "#334155", 16, 1));
 
@@ -146,7 +163,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
         frontCard.addView(previewFrame);
 
-        // Controles cortos del visor frontal + boton desplegable (▾)
+        // Controles cortos del visor frontal + botón desplegable (▾)
         LinearLayout frontControlsRow = new LinearLayout(this);
         frontControlsRow.setOrientation(LinearLayout.HORIZONTAL);
         frontControlsRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -195,7 +212,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         frontCard.addView(frontTechView);
         root.addView(frontCard);
 
-        // 3. Encabezado de Seccion Trasera
+        // 4. Encabezado de Sección Trasera
         TextView rearSectionHeader = new TextView(this);
         rearSectionHeader.setText("MODOS DE RESCATE — CÁMARA TRASERA");
         rearSectionHeader.setTextColor(Color.parseColor("#94A3B8"));
@@ -208,7 +225,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         rearSectionHeader.setLayoutParams(sectionLp);
         root.addView(rearSectionHeader);
 
-        // Tarjeta 1: Camara Trasera Pro (ISP 50MP/12MP - ID 56 y 52)
+        // Tarjeta 1: Cámara Trasera Pro (ISP 50MP/12MP - ID 56 y 52)
         root.addView(createExpandableRescueCard(
                 CameraConfig.BTN_REAR_PRO_SHORT,
                 "Recomendado · Lentes 1x (50 MP) y 3x Tele · ISP Nativo",
@@ -218,7 +235,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 () -> launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO)
         ));
 
-        // Tarjeta 2: Trasera Rapida (QR + Boton Obturador Flotante - ID 56)
+        // Tarjeta 2: Trasera Rápida (QR + Botón Obturador Flotante - ID 56)
         root.addView(createExpandableRescueCard(
                 CameraConfig.BTN_REAR_QR_SHORT,
                 "Obturador Flotante Rescue · Lente 1x Principal",
@@ -243,9 +260,190 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     }
 
     /**
-     * Construye una tarjeta moderna con boton de titulo corto, subtitulo conciso y un boton de flecha (▾/▴)
-     * que despliega u oculta la explicacion tecnica del modo de rescate.
+     * Construye la tarjeta interactiva de diagnóstico de sensores (v1.2.0).
      */
+    private LinearLayout buildDiagnosticCard() {
+        LinearLayout diagCard = new LinearLayout(this);
+        diagCard.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        diagCard.setPadding(pad, pad, pad, pad);
+        diagCard.setBackground(createRoundedDrawable("#0F172A", "#0284C7", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dpToPx(14);
+        diagCard.setLayoutParams(cardLp);
+
+        // Cabecera del diagnóstico
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout infoCol = new LinearLayout(this);
+        infoCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams infoColLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        infoCol.setLayoutParams(infoColLp);
+
+        TextView diagTitle = new TextView(this);
+        diagTitle.setText("DIAGNÓSTICO ON-DEVICE");
+        diagTitle.setTextColor(Color.parseColor("#38BDF8"));
+        diagTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        diagTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        infoCol.addView(diagTitle);
+
+        TextView modelText = new TextView(this);
+        modelText.setText(modelProfile.marketingName + " (" + Build.MODEL + ")");
+        modelText.setTextColor(Color.parseColor("#F8FAFC"));
+        modelText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        modelText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        infoCol.addView(modelText);
+        topRow.addView(infoCol);
+
+        TextView seriesBadge = new TextView(this);
+        seriesBadge.setText(modelProfile.series);
+        seriesBadge.setTextColor(Color.parseColor("#10B981"));
+        seriesBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        seriesBadge.setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3));
+        seriesBadge.setBackground(createRoundedDrawable("#064E3B", "#059669", 10, 1));
+        topRow.addView(seriesBadge);
+        diagCard.addView(topRow);
+
+        // Botón de ejecución de escaneo
+        runScanButton = createShortButton(
+                "🔍 Escanear Sensores de este Galaxy",
+                "#0284C7",
+                "#FFFFFF",
+                true
+        );
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(46));
+        btnLp.topMargin = dpToPx(10);
+        btnLp.bottomMargin = dpToPx(6);
+        runScanButton.setLayoutParams(btnLp);
+        runScanButton.setOnClickListener(v -> triggerSensorScan());
+        diagCard.addView(runScanButton);
+
+        // Estado del escaneo
+        scanStatusText = new TextView(this);
+        scanStatusText.setText("Prueba secuencial no bloqueante (Canary Streams) para aislar fallos de hardware.");
+        scanStatusText.setTextColor(Color.parseColor("#94A3B8"));
+        scanStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        diagCard.addView(scanStatusText);
+
+        // Contenedor dinámico de resultados
+        scanResultsContainer = new LinearLayout(this);
+        scanResultsContainer.setOrientation(LinearLayout.VERTICAL);
+        scanResultsContainer.setVisibility(View.GONE);
+        LinearLayout.LayoutParams resLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        resLp.topMargin = dpToPx(8);
+        scanResultsContainer.setLayoutParams(resLp);
+        diagCard.addView(scanResultsContainer);
+
+        return diagCard;
+    }
+
+    private void triggerSensorScan() {
+        if (sensorScanner.isScanning()) {
+            return;
+        }
+        runScanButton.setEnabled(false);
+        runScanButton.setText("⏳ Escaneando lentes de hardware...");
+        scanResultsContainer.removeAllViews();
+        scanResultsContainer.setVisibility(View.VISIBLE);
+
+        sensorScanner.startScan(modelProfile, new SensorScanner.ScanCallback() {
+            @Override
+            public void onScanStarted(int totalSensors) {
+                scanStatusText.setText("Iniciando prueba de " + totalSensors + " sensores detectados...");
+                scanStatusText.setTextColor(Color.parseColor("#38BDF8"));
+            }
+
+            @Override
+            public void onSensorTested(int index, int total, DiscoveredSensor sensor) {
+                scanStatusText.setText("Probando sensor " + index + " de " + total + " (" + sensor.name + ")...");
+                addSensorResultRow(sensor);
+            }
+
+            @Override
+            public void onScanCompleted(List<DiscoveredSensor> results, int healthyCount, int damagedCount) {
+                runScanButton.setEnabled(true);
+                runScanButton.setText("✓ Escanear Nuevamente");
+                String summary = "Escaneo completado: " + healthyCount + " lentes funcionales, " + damagedCount + " con avería.";
+                scanStatusText.setText(summary);
+                scanStatusText.setTextColor(damagedCount > 0 ? Color.parseColor("#FBBF24") : Color.parseColor("#34D399"));
+                Toast.makeText(MainActivity.this, summary, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onScanError(String errorMessage) {
+                runScanButton.setEnabled(true);
+                runScanButton.setText("🔍 Reintentar Escaneo");
+                scanStatusText.setText("Error en escaneo: " + errorMessage);
+                scanStatusText.setTextColor(Color.parseColor("#FCA5A5"));
+            }
+        });
+    }
+
+    private void addSensorResultRow(DiscoveredSensor sensor) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(8);
+        row.setPadding(pad, pad, pad, pad);
+        row.setBackground(createRoundedDrawable("#090D16", "#1E293B", 10, 1));
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.bottomMargin = dpToPx(6);
+        row.setLayoutParams(rowLp);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView nameView = new TextView(this);
+        nameView.setText(sensor.name + " (ID " + sensor.id + ")");
+        nameView.setTextColor(Color.parseColor("#F1F5F9"));
+        nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        nameView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        nameView.setLayoutParams(nameLp);
+        header.addView(nameView);
+
+        TextView badge = new TextView(this);
+        badge.setText(sensor.health.displayName);
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        badge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+
+        String bgHex = "#1E293B";
+        String strokeHex = "#475569";
+        if (sensor.health == SensorHealth.HEALTHY) {
+            bgHex = "#064E3B";
+            strokeHex = "#059669";
+            badge.setTextColor(Color.parseColor("#34D399"));
+        } else if (sensor.health == SensorHealth.DAMAGED) {
+            bgHex = "#450A0A";
+            strokeHex = "#DC2626";
+            badge.setTextColor(Color.parseColor("#FCA5A5"));
+        } else if (sensor.health == SensorHealth.HAL_PRIVATE) {
+            bgHex = "#1E1B4B";
+            strokeHex = "#6366F1";
+            badge.setTextColor(Color.parseColor("#A5B4FC"));
+        }
+        badge.setBackground(createRoundedDrawable(bgHex, strokeHex, 8, 1));
+        header.addView(badge);
+        row.addView(header);
+
+        if (sensor.statusDetail != null && !sensor.statusDetail.isEmpty()) {
+            TextView detail = new TextView(this);
+            detail.setText(sensor.statusDetail);
+            detail.setTextColor(Color.parseColor("#94A3B8"));
+            detail.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            detail.setPadding(0, dpToPx(3), 0, 0);
+            row.addView(detail);
+        }
+
+        scanResultsContainer.addView(row);
+    }
+
     private LinearLayout createExpandableRescueCard(
             String shortButtonTitle,
             String subtitleText,
@@ -380,7 +578,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         if (service == null) {
             Toast.makeText(
                     this,
-                    "Activa 'S23+ Camera Rescue — Obturador Trasero' en Accesibilidad para usar el boton flotante.",
+                    "Activa 'Samsung Camera Rescue — Obturador Trasero' en Accesibilidad para usar el botón flotante.",
                     Toast.LENGTH_LONG
             ).show();
             try {
@@ -435,7 +633,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 frontCameraController.start(frontPreviewView, getDisplayRotationCompat());
             } else {
-                onError("Permiso de camara requerido para el visor frontal (ID 1 y 3).");
+                onError("Permiso de cámara requerido para probar sensores y visor frontal.");
             }
         }
     }

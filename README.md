@@ -20,20 +20,24 @@ Documentación técnica completa:
 
 ---
 
-## ✨ Características Principales (`v1.0.1`)
+## ✨ Características Principales (`v1.2.0`)
 
-1. **Identidad Visual e Interfaz Moderna:**
+1. **Motor de Diagnóstico y Escáner On-Device (*Canary Testing*):**
+   - **`SamsungModelDatabase`:** Catálogo heurístico offline que detecta automáticamente el modelo exacto del dispositivo (`Build.MODEL`, series S9 a S25 Ultra, Note, Fold/Flip y Serie A) y asigna sus sensores de hardware e IDs de bypass.
+   - **`SensorScanner`:** Pruebas secuenciales no bloqueantes en un hilo de fondo dedicado (`HandlerThread`) sobre `CameraManager` para probar cada lente y aislar averías de hardware en el bus I2C o EEPROM.
+   - **Clasificador Visual de Salud:** Muestra en pantalla el estado exacto de cada lente (`🟢 Operativo`, `🔴 Dañado / Error I2C`, `🔒 Modo Pro Requerido`).
+2. **Identidad Visual e Interfaz Moderna:**
+   - Botón interactivo: **`🔍 Escanear Sensores de este Galaxy`** con reporte en vivo y resumen de salud óptica.
    - Icono adaptativo vectorial (`@mipmap/ic_launcher`) con diseño de lente óptico e insignia de rescate.
-   - Botones de acción con nombres cortos y directos (**`Tomar Selfie`**, **`Cámara Trasera Pro`**, **`Trasera Rápida (QR)`**, **`Video Trasero Pro`**) acompañados de botones desplegables (**`▾` / `▴`**) que muestran u ocultan la ficha técnica de cada sensor y modo HAL.
-2. **Visor Frontal Nativo `Camera2` (`ID 1` y `ID 3`) Integrado:**
+   - Botones de acción con nombres cortos y directos (**`Tomar Selfie`**, **`Cámara Trasera Pro`**, **`Trasera Rápida (QR)`**, **`Video Trasero Pro`**) acompañados de desplegables técnicos (**`▾` / `▴`**).
+3. **Visor Frontal Nativo `Camera2` (`ID 1` y `ID 3`) Integrado:**
    - Vista previa fluida en tiempo real (`TextureView`).
-   - Conmutación instantánea entre **`ID 1` (12 MP Gran Angular, `4000x3000`)** e **`ID 3` (8.6 MP Normal, `3392x2544`)**.
-   - Disparo directo y guardado transaccional JPEG en `Pictures/S23Camera` (visible de inmediato en Samsung Gallery y Google Fotos).
-3. **Lanzador Directo Trasero 1x / 3x — Modo Pro ISP (`device 56` y `device 52`):**
-   - Abre la cámara de Samsung limpiando cualquier estado colgado (`FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TASK`) directamente sobre el sensor `S5KGN3` (1x `W`, `device 56`) y `S5K3K1` (3x `T`, `device 52`) con todo el procesamiento ISP de hardware (Auto ISO, Auto Obturador, Auto-Focus, Flash y disparo nativo en `DCIM/Camera`).
-   - Incluye también acceso directo a **Video Trasero Pro (`device 56` / `52`)**.
-4. **Lanzador Trasero 1x vía Escáner QR + HUD Obturador Flotante (`device 56`):**
-   - Abre el visor `SCAN_QR_CODE` (`device 56`) y superpone una barra flotante minimalista (`RearCaptureService`) con botón **Capturar**, selector de recorte (**Visor** vs **Completo**) y botón para volver a la cámara frontal.
+   - Conmutación instantánea entre **`ID 1` (12 MP Gran Angular)** e **`ID 3` (8.6 MP Normal)**.
+   - Disparo directo y guardado transaccional JPEG en `Pictures/S23Camera`.
+4. **Lanzador Directo Trasero 1x / 3x — Modo Pro ISP (`device 56` y `device 52`):**
+   - Abre la cámara nativa en Modo Pro (`ShootingMode 3`) y Video Pro (`ShootingMode 36`) sobre los sensores desacoplados `device 56` (1x Principal) y `device 52` (3x Telefoto), omitiendo el chequeo del sensor dañado.
+5. **Lanzador Trasero 1x vía Escáner QR + HUD Flotante (`device 56`):**
+   - Abre el visor `SCAN_QR_CODE` (`device 56`) y superpone la barra flotante minimalista (`RearCaptureService`) con botón **Capturar** y selector de recorte (**Visor** vs **Completo**).
 
 ---
 
@@ -58,11 +62,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test-local.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-local.ps1
 ```
-El APK firmado se genera en `dist/s23-plus-camera-rescue-v1.0.1.apk`.
+El APK firmado se genera en `dist/camera-rescue-v1.2.0.apk`.
 
 ### Instalar en el dispositivo vía ADB
 ```powershell
-adb install -r .\dist\s23-plus-camera-rescue-v1.0.1.apk
+adb install -r .\dist\camera-rescue-v1.2.0.apk
 ```
 
 ---
@@ -71,7 +75,7 @@ adb install -r .\dist\s23-plus-camera-rescue-v1.0.1.apk
 
 El workflow [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) está configurado para ejecutarse **únicamente cuando se envía un tag de versión (`v*`)**:
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.2.0
+git push origin v1.2.0
 ```
 Esto mantiene el consumo de minutos de CI en `0` durante el desarrollo normal.

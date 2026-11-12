@@ -10,9 +10,9 @@ El proyecto se enfoca **exclusivamente en el ecosistema de dispositivos móviles
 
 ```mermaid
 flowchart TD
-    v101["v1.0.1 (Actual Estable)<br/>• S23+ Rescatado al 100%<br/>• UI Moderna Oscura + Icono Adaptativo<br/>• Nombres Cortos + Fichas Desplegables (▾/▴)"]
+    v101["v1.0.1 (Completado)<br/>• S23+ Rescatado al 100%<br/>• UI Moderna Oscura + Icono Adaptativo<br/>• Nombres Cortos + Fichas Desplegables (▾/▴)"]
     
-    v120["v1.2.0 (Motor de Diagnóstico & Escáner de Sensores)<br/>• Escáner On-Device no bloqueante (Canary Streams)<br/>• Detección automática de sensores sanos vs dañados<br/>• Wizard de permisos y pre-requisitos (Cámara + ADB/Shizuku)"]
+    v120["v1.2.0 (Estable Actual)<br/>• Base de Datos Heurística (SamsungModelDatabase)<br/>• Escáner On-Device no bloqueante (Canary Streams)<br/>• Clasificador de salud óptica (🟢 Operativo / 🔴 Dañado / 🔒 Pro)"]
     
     v130["v1.3.0 (Selector Múltiple Dinámico & UI Builder)<br/>• Checklists dinámicos de lentes funcionales por modelo<br/>• Generación automática de botones y tarjetas adaptadas<br/>• App Shortcuts dinámicos en Launcher y Quick Settings Tile"]
     
@@ -48,8 +48,8 @@ El alcance del proyecto cubre desde los primeros dispositivos Samsung con arregl
 
 | Versión | Alcance | Hito Principal | Dependencia de Depuración USB |
 | :--- | :--- | :--- | :--- |
-| **`v1.0.1`** | Samsung S23+ | **Estable actual**: Rescate IDs 56, 52, 1, 3, UI moderna oscura, icono adaptativo, tarjetas técnicas ▾/▴. | Ninguna para uso diario (solo se usó en el diagnóstico inicial). |
-| **`v1.2.0`** | Familia Samsung Galaxy | **Motor de Diagnóstico**: Escaneo canary on-device de sensores, reporte de salud por lente. | Opcional (Modo básico 100% en celular; ADB/Shizuku solo para auditoría interna). |
+| **`v1.0.1`** | Samsung S23+ | **Completado**: Rescate IDs 56, 52, 1, 3, UI moderna oscura, icono adaptativo, tarjetas técnicas ▾/▴. | Ninguna para uso diario (solo se usó en el diagnóstico inicial). |
+| **`v1.2.0`** | Familia Samsung Galaxy | **Estable actual**: Escaneo canary on-device de sensores, base de datos heurística de modelos Samsung (`SamsungModelDatabase`), reporte visual de salud de cada lente. | Ninguna (100% en dispositivo). |
 | **`v1.3.0`** | Familia Samsung Galaxy | **Selector Múltiple & UI Dinámica**: Checkboxes de lentes, generación dinámica de botones y App Shortcuts. | Ninguna (100% en celular). |
 | **`v1.4.0`** | Familia Samsung Galaxy | **Auto-Matcher One UI**: Diccionario heurístico de modos Pro/QR por modelo y asistente de tecla lateral. | Ninguna (Base de datos pre-compilada). |
 | **`v2.0.0`** | Ecosistema Samsung (S9 a S25+) | **Universal Samsung Rescue**: Visor completo nativo, diafragma mecánico variable, zoom digital por software y video MP4. | Ninguna (Completamente autónomo). |

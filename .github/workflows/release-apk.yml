@@ -26,20 +26,23 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK (Build-Tools 34 & Platform 34)
-        uses: android-actions/setup-android@v3
-
-      - name: Run Unit Tests (CameraConfigTest)
+      - name: Run Unit Tests (CameraConfigTest & SamsungModelDatabaseTest)
         run: |
           mkdir -p build/test-classes
           javac -encoding UTF-8 -d build/test-classes \
             app/src/main/java/com/s23plus/camera/CameraConfig.java \
-            app/src/test/java/com/s23plus/camera/CameraConfigTest.java
+            app/src/main/java/com/s23plus/camera/SamsungModelDatabase.java \
+            app/src/main/java/com/s23plus/camera/SensorHealth.java \
+            app/src/main/java/com/s23plus/camera/DiscoveredSensor.java \
+            app/src/test/java/com/s23plus/camera/CameraConfigTest.java \
+            app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java
           java -cp build/test-classes com.s23plus.camera.CameraConfigTest
+          java -cp build/test-classes com.s23plus.camera.SamsungModelDatabaseTest
 
       - name: Build and Sign Release APK
         run: |
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" || true
           BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
           ANDROID_JAR="$ANDROID_HOME/platforms/android-34/android.jar"
 
@@ -51,8 +54,8 @@ jobs:
             --manifest app/src/main/AndroidManifest.xml \
             --min-sdk-version 30 \
             --target-sdk-version 34 \
-            --version-code 2 \
-            --version-name "1.0.1" \
+            --version-code 3 \
+            --version-name "1.2.0" \
             -o build/apk-ci/unaligned.apk \
             --java build/apk-ci/gen \
             build/apk-ci/compiled_res/res.zip

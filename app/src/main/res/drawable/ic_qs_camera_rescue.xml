@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Silueta monocroma de cámara para Quick Settings Tile -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M4,7 L7.5,7 L9.2,4.5 L14.8,4.5 L16.5,7 L20,7 C21.1,7 22,7.9 22,9 L22,18 C22,19.1 21.1,20 20,20 L4,20 C2.9,20 2,19.1 2,18 L2,9 C2,7.9 2.9,7 4,7 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.8" />
+
+    <!-- Anillo óptico del lente -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12,9.2 A4.3,4.3 0 1,0 12,17.8 A4.3,4.3 0 1,0 12,9.2 Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5" />
+
+    <!-- Cruz de rescate centrada -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M11.1,11.3 H12.9 V12.6 H14.2 V14.4 H12.9 V15.7 H11.1 V14.4 H9.8 V12.6 H11.1 Z" />
+</vector>

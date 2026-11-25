@@ -19,6 +19,11 @@ public final class RescuePreferences {
     private static final String KEY_QUICK_TILE_ACTION = "quick_tile_action";
     private static final String KEY_QUICK_TILE_LABEL = "quick_tile_label";
     private static final String KEY_ASSISTANT_COMPLETED_STEPS = "assistant_completed_steps";
+    private static final String KEY_VIEWER_PREFERRED_CAMERA_ID = "viewer_preferred_camera_id";
+    private static final String KEY_VIEWER_GRID_MODE = "viewer_grid_mode";
+    private static final String KEY_VIEWER_TIMER_SECONDS = "viewer_timer_seconds";
+    private static final String KEY_VIEWER_FLASH_MODE = "viewer_flash_mode";
+    private static final String KEY_VIEWER_PREFERRED_APERTURE = "viewer_preferred_aperture";
     private static final String DEFAULT_QUICK_TILE_LABEL = "Trasera Pro";
 
     private RescuePreferences() {
@@ -131,6 +136,96 @@ public final class RescuePreferences {
         }
         String serialized = prefs(context).getString(KEY_ASSISTANT_COMPLETED_STEPS, "");
         return OneUiAssistantGuide.deserializeCompletedStepIds(serialized);
+    }
+
+    /**
+     * Guarda las preferencias del visor Camera2 universal.
+     */
+    public static void saveViewerPreferences(
+            Context context,
+            DiagnosticProfileCodec.ViewerPreferencesSnapshot snapshot
+    ) {
+        if (context == null || snapshot == null) {
+            return;
+        }
+        String safeCameraId = (snapshot.preferredCameraId == null || snapshot.preferredCameraId.trim().isEmpty())
+                ? CameraConfig.FRONT_CAMERA_WIDE_ID
+                : snapshot.preferredCameraId.trim();
+        CameraViewerMath.GridMode safeGrid = (snapshot.gridMode != null)
+                ? snapshot.gridMode
+                : CameraViewerMath.GridMode.OFF;
+        int safeTimer = CameraViewerMath.sanitizeTimerSeconds(snapshot.timerSeconds);
+        CameraViewerMath.FlashMode safeFlash = (snapshot.flashMode != null)
+                ? snapshot.flashMode
+                : CameraViewerMath.FlashMode.OFF;
+        float safeAperture = sanitizeStoredAperture(snapshot.preferredAperture);
+
+        prefs(context)
+                .edit()
+                .putString(KEY_VIEWER_PREFERRED_CAMERA_ID, safeCameraId)
+                .putString(KEY_VIEWER_GRID_MODE, safeGrid.name())
+                .putInt(KEY_VIEWER_TIMER_SECONDS, safeTimer)
+                .putString(KEY_VIEWER_FLASH_MODE, safeFlash.name())
+                .putFloat(KEY_VIEWER_PREFERRED_APERTURE, safeAperture)
+                .apply();
+    }
+
+    /**
+     * Carga las preferencias del visor Camera2 universal con respaldo seguro ante valores corruptos.
+     */
+    public static DiagnosticProfileCodec.ViewerPreferencesSnapshot loadViewerPreferences(Context context) {
+        if (context == null) {
+            return DiagnosticProfileCodec.ViewerPreferencesSnapshot.defaults();
+        }
+        SharedPreferences sharedPreferences = prefs(context);
+        String cameraId = sharedPreferences.getString(
+                KEY_VIEWER_PREFERRED_CAMERA_ID,
+                CameraConfig.FRONT_CAMERA_WIDE_ID
+        );
+        CameraViewerMath.GridMode gridMode = parseEnumOrDefault(
+                sharedPreferences.getString(KEY_VIEWER_GRID_MODE, CameraViewerMath.GridMode.OFF.name()),
+                CameraViewerMath.GridMode.class,
+                CameraViewerMath.GridMode.OFF
+        );
+        int timerSeconds = CameraViewerMath.sanitizeTimerSeconds(
+                sharedPreferences.getInt(KEY_VIEWER_TIMER_SECONDS, 0)
+        );
+        CameraViewerMath.FlashMode flashMode = parseEnumOrDefault(
+                sharedPreferences.getString(KEY_VIEWER_FLASH_MODE, CameraViewerMath.FlashMode.OFF.name()),
+                CameraViewerMath.FlashMode.class,
+                CameraViewerMath.FlashMode.OFF
+        );
+        float aperture = sanitizeStoredAperture(
+                sharedPreferences.getFloat(
+                        KEY_VIEWER_PREFERRED_APERTURE,
+                        CameraViewerMath.ApertureCapabilities.APERTURE_AUTO
+                )
+        );
+        return new DiagnosticProfileCodec.ViewerPreferencesSnapshot(
+                cameraId,
+                gridMode,
+                timerSeconds,
+                flashMode,
+                aperture
+        );
+    }
+
+    private static <E extends Enum<E>> E parseEnumOrDefault(String raw, Class<E> enumClass, E fallback) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return fallback;
+        }
+        try {
+            return Enum.valueOf(enumClass, raw.trim());
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
+    }
+
+    private static float sanitizeStoredAperture(float aperture) {
+        if (!Float.isFinite(aperture) || aperture <= 0.0f) {
+            return CameraViewerMath.ApertureCapabilities.APERTURE_AUTO;
+        }
+        return aperture;
     }
 
     private static SharedPreferences prefs(Context context) {

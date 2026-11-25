@@ -2,7 +2,6 @@ package com.s23plus.camera;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -11,6 +10,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -32,13 +33,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Actividad principal de Samsung Camera Rescue (v1.3.0).
+ * Actividad principal de Samsung Camera Rescue (v1.4.0).
  *
  * Incluye:
- * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase).
+ * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase) y detección de One UI.
  * 2. Escáner de sensores on-device (SensorScanner) con selector interactivo de lentes funcionales.
  * 3. Visor Camera2 en vivo para sensores frontales funcionales adaptativo según selección.
- * 4. Tarjetas dinámicas de rescate, accesos directos dinámicos/fijables y Quick Settings Tile.
+ * 4. Tarjetas dinámicas de rescate vía ShootingModeMap, recuperación rápida de bloqueos,
+ *    asistente colapsable One UI, accesos directos y Quick Settings Tile.
  */
 public final class MainActivity extends Activity implements FrontCameraController.StatusListener {
 
@@ -66,6 +68,24 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private Button quickTileTargetButton;
     private int lastPublishedShortcutsCount = 0;
 
+    // Motor heurístico de modos, asistente One UI y recuperación rápida (v1.4.0)
+    private ShootingModeMap.OneUiGeneration oneUiGeneration;
+    private List<OneUiAssistantGuide.AssistantStep> assistantSteps = new ArrayList<>();
+    private Set<String> completedAssistantStepIds = new LinkedHashSet<>();
+    private final Handler recoveryHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingRecoveryRunnable;
+    private long lastRearLaunchTimestampMs = 0L;
+    private ShootingModeMap.ModeKind lastLaunchedRearMode = ShootingModeMap.ModeKind.PRO_PHOTO;
+    private int recoveryAttemptIndex = 0;
+    private boolean recoveryAttemptAdvancedOnLaunch = false;
+
+    private LinearLayout recoveryCard;
+    private TextView recoveryStatusText;
+    private Button recoveryActionButton;
+    private TextView assistantProgressBadge;
+    private LinearLayout assistantStepsContainer;
+    private Button assistantToggleButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -73,6 +93,12 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         setTurnScreenOn(true);
 
         modelProfile = SamsungModelDatabase.lookup(Build.MODEL);
+        oneUiGeneration = OneUiSystemBridge.detectDeviceOneUiGeneration();
+        assistantSteps = OneUiAssistantGuide.buildSteps(modelProfile, oneUiGeneration);
+        completedAssistantStepIds = OneUiAssistantGuide.sanitizeCompletedStepIds(
+                RescuePreferences.loadAssistantCompletedSteps(this),
+                assistantSteps
+        );
         sensorScanner = new SensorScanner(this);
         frontCameraController = new FrontCameraController(this, this);
 
@@ -100,13 +126,16 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         String action = intent.getAction();
         if (CameraConfig.ACTION_LAUNCH_REAR_PRO.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
-            launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO);
+            launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_PHOTO);
         } else if (CameraConfig.ACTION_LAUNCH_REAR_QR.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
             launchRearQrWithFloatingHud();
         } else if (CameraConfig.ACTION_LAUNCH_REAR_VIDEO.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
-            launchSamsungRearMode(CameraConfig.MODE_PRO_VIDEO, CameraConfig.ACTIVITY_NAME_PRO_VIDEO);
+            launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_VIDEO);
+        } else if (CameraConfig.ACTION_QUICK_RECOVERY.equals(action)) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            executeQuickRecovery();
         } else if (CameraConfig.ACTION_LAUNCH_FRONT.equals(action)) {
             String sensorId = intent.getStringExtra(CameraConfig.EXTRA_SHORTCUT_SENSOR_ID);
             setIntent(new Intent(Intent.ACTION_MAIN));
@@ -150,7 +179,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         titleColumn.addView(titleView);
 
         TextView subtitleView = new TextView(this);
-        subtitleView.setText("Rescate de Sensores · " + modelProfile.marketingName);
+        subtitleView.setText("Rescate de Sensores · " + modelProfile.marketingName + " · " + oneUiGeneration.displayName);
         subtitleView.setTextColor(Color.parseColor("#64748B"));
         subtitleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         titleColumn.addView(subtitleView);
@@ -280,11 +309,302 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         rearCardsContainer.setOrientation(LinearLayout.VERTICAL);
         root.addView(rearCardsContainer);
 
-        // 5. Tarjeta de Atajos Dinámicos y Quick Settings Tile (v1.3.0)
+        // 5. Tarjeta de Recuperación Rápida de Bloqueos (v1.4.0)
+        root.addView(buildRecoveryCard());
+
+        // 6. Asistente Colapsable One UI (v1.4.0)
+        root.addView(buildOneUiAssistantCard());
+
+        // 7. Tarjeta de Atajos Dinámicos y Quick Settings Tile
         root.addView(buildShortcutsAndTileCard());
 
         rootScroll.addView(root);
         setContentView(rootScroll);
+    }
+
+    /**
+     * Construye la tarjeta de recuperación rápida ante bloqueos HAL o cierres inmediatos de Samsung Camera.
+     */
+    private LinearLayout buildRecoveryCard() {
+        recoveryCard = new LinearLayout(this);
+        recoveryCard.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        recoveryCard.setPadding(pad, pad, pad, pad);
+        recoveryCard.setBackground(createRoundedDrawable("#111827", "#334155", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.topMargin = dpToPx(4);
+        cardLp.bottomMargin = dpToPx(10);
+        recoveryCard.setLayoutParams(cardLp);
+
+        TextView header = new TextView(this);
+        header.setText("RECUPERACIÓN RÁPIDA DE BLOQUEOS");
+        header.setTextColor(Color.parseColor("#38BDF8"));
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        recoveryCard.addView(header);
+
+        recoveryStatusText = new TextView(this);
+        recoveryStatusText.setTextColor(Color.parseColor("#94A3B8"));
+        recoveryStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusLp.topMargin = dpToPx(4);
+        statusLp.bottomMargin = dpToPx(10);
+        recoveryStatusText.setLayoutParams(statusLp);
+        recoveryCard.addView(recoveryStatusText);
+
+        recoveryActionButton = createShortButton(
+                "⚡ Destrabar Cámara → Modo Pro",
+                "#0284C7",
+                "#FFFFFF",
+                true
+        );
+        LinearLayout.LayoutParams primaryLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(46));
+        recoveryActionButton.setLayoutParams(primaryLp);
+        recoveryActionButton.setOnClickListener(v -> executeQuickRecovery());
+        recoveryCard.addView(recoveryActionButton);
+
+        LinearLayout secondaryRow = new LinearLayout(this);
+        secondaryRow.setOrientation(LinearLayout.HORIZONTAL);
+        secondaryRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams secRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        secRowLp.topMargin = dpToPx(8);
+        secondaryRow.setLayoutParams(secRowLp);
+
+        Button resetPreviewBtn = createShortButton("↻ Reiniciar Visor", "#1E293B", "#7DD3FC", false);
+        LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(0, dpToPx(42), 1.0f);
+        resetLp.rightMargin = dpToPx(8);
+        resetPreviewBtn.setLayoutParams(resetLp);
+        resetPreviewBtn.setOnClickListener(v -> {
+            frontCameraController.stop();
+            ensureCameraPermissionAndStartFrontPreview();
+            recoveryAttemptIndex = 0;
+            recoveryAttemptAdvancedOnLaunch = false;
+            updateRecoveryCardState(false, "Visor Camera2 local reiniciado.");
+        });
+        secondaryRow.addView(resetPreviewBtn);
+
+        Button appInfoBtn = createShortButton("⚙ App Cámara", "#1E293B", "#CBD5E1", false);
+        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(0, dpToPx(42), 1.0f);
+        appInfoBtn.setLayoutParams(infoLp);
+        appInfoBtn.setOnClickListener(v -> {
+            if (!OneUiSystemBridge.openSamsungCameraAppInfo(this)) {
+                onError("No se pudo abrir Información de Samsung Camera.");
+            }
+        });
+        secondaryRow.addView(appInfoBtn);
+
+        recoveryCard.addView(secondaryRow);
+        updateRecoveryCardState(false, null);
+        return recoveryCard;
+    }
+
+    /**
+     * Construye el asistente colapsable paso a paso para fijar Modo Pro y Tecla Lateral en One UI.
+     */
+    private LinearLayout buildOneUiAssistantCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        card.setPadding(pad, pad, pad, pad);
+        card.setBackground(createRoundedDrawable("#111827", "#1F2937", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dpToPx(10);
+        card.setLayoutParams(cardLp);
+
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout titleCol = new LinearLayout(this);
+        titleCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams titleColLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        titleCol.setLayoutParams(titleColLp);
+
+        TextView header = new TextView(this);
+        header.setText("ASISTENTE ONE UI · AJUSTES Y TECLA LATERAL");
+        header.setTextColor(Color.parseColor("#38BDF8"));
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        titleCol.addView(header);
+
+        TextView sub = new TextView(this);
+        sub.setText(oneUiGeneration.displayName + " · Fija Modo Pro y pulsación doble");
+        sub.setTextColor(Color.parseColor("#94A3B8"));
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        titleCol.addView(sub);
+        headerRow.addView(titleCol);
+
+        assistantProgressBadge = new TextView(this);
+        assistantProgressBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        assistantProgressBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        assistantProgressBadge.setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3));
+        LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        badgeLp.rightMargin = dpToPx(8);
+        assistantProgressBadge.setLayoutParams(badgeLp);
+        headerRow.addView(assistantProgressBadge);
+
+        assistantToggleButton = new Button(this);
+        assistantToggleButton.setAllCaps(false);
+        assistantToggleButton.setText("▾");
+        assistantToggleButton.setTextColor(Color.parseColor("#38BDF8"));
+        assistantToggleButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        assistantToggleButton.setTypeface(Typeface.DEFAULT_BOLD);
+        assistantToggleButton.setBackground(createRoundedDrawable("#0F172A", "#334155", 13, 1));
+        assistantToggleButton.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(44), dpToPx(44)));
+        headerRow.addView(assistantToggleButton);
+
+        card.addView(headerRow);
+
+        assistantStepsContainer = new LinearLayout(this);
+        assistantStepsContainer.setOrientation(LinearLayout.VERTICAL);
+        assistantStepsContainer.setVisibility(View.GONE);
+        LinearLayout.LayoutParams stepsLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        stepsLp.topMargin = dpToPx(10);
+        assistantStepsContainer.setLayoutParams(stepsLp);
+
+        for (OneUiAssistantGuide.AssistantStep step : assistantSteps) {
+            assistantStepsContainer.addView(buildAssistantStepView(step));
+        }
+        card.addView(assistantStepsContainer);
+
+        assistantToggleButton.setOnClickListener(v -> {
+            boolean willShow = assistantStepsContainer.getVisibility() != View.VISIBLE;
+            assistantStepsContainer.setVisibility(willShow ? View.VISIBLE : View.GONE);
+            assistantToggleButton.setText(willShow ? "▴" : "▾");
+            assistantToggleButton.setBackground(createRoundedDrawable(
+                    willShow ? "#1E293B" : "#0F172A",
+                    willShow ? "#38BDF8" : "#334155",
+                    13,
+                    1
+            ));
+        });
+
+        refreshAssistantProgressBadge();
+        return card;
+    }
+
+    private LinearLayout buildAssistantStepView(final OneUiAssistantGuide.AssistantStep step) {
+        LinearLayout stepBox = new LinearLayout(this);
+        stepBox.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(10);
+        stepBox.setPadding(pad, pad, pad, pad);
+        stepBox.setBackground(createRoundedDrawable("#090D16", "#1E293B", 12, 1));
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.bottomMargin = dpToPx(8);
+        stepBox.setLayoutParams(boxLp);
+
+        LinearLayout topRow = new LinearLayout(this);
+        topRow.setOrientation(LinearLayout.HORIZONTAL);
+        topRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        CheckBox checkBox = new CheckBox(this);
+        checkBox.setButtonTintList(ColorStateList.valueOf(Color.parseColor("#38BDF8")));
+        checkBox.setChecked(completedAssistantStepIds.contains(step.id));
+        LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cbLp.rightMargin = dpToPx(6);
+        checkBox.setLayoutParams(cbLp);
+        checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                completedAssistantStepIds.add(step.id);
+            } else {
+                completedAssistantStepIds.remove(step.id);
+            }
+            RescuePreferences.saveAssistantCompletedSteps(MainActivity.this, completedAssistantStepIds);
+            refreshAssistantProgressBadge();
+        });
+        topRow.addView(checkBox);
+
+        TextView titleView = new TextView(this);
+        titleView.setText(step.stepNumber + ". " + step.title);
+        titleView.setTextColor(Color.parseColor("#F1F5F9"));
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        titleView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        titleView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+        topRow.addView(titleView);
+        stepBox.addView(topRow);
+
+        TextView pathEsView = new TextView(this);
+        pathEsView.setText("ES: " + step.menuPathEs);
+        pathEsView.setTextColor(Color.parseColor("#7DD3FC"));
+        pathEsView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        pathEsView.setPadding(0, dpToPx(4), 0, 0);
+        stepBox.addView(pathEsView);
+
+        TextView pathEnView = new TextView(this);
+        pathEnView.setText("EN: " + step.menuPathEn);
+        pathEnView.setTextColor(Color.parseColor("#64748B"));
+        pathEnView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        pathEnView.setPadding(0, dpToPx(2), 0, 0);
+        stepBox.addView(pathEnView);
+
+        TextView instructionView = new TextView(this);
+        instructionView.setText(step.instruction);
+        instructionView.setTextColor(Color.parseColor("#CBD5E1"));
+        instructionView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        instructionView.setPadding(0, dpToPx(4), 0, 0);
+        stepBox.addView(instructionView);
+
+        Button actionBtn = createShortButton(step.buttonLabel, "#1E293B", "#38BDF8", true);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(40));
+        btnLp.topMargin = dpToPx(8);
+        actionBtn.setLayoutParams(btnLp);
+        actionBtn.setOnClickListener(v -> executeAssistantStepAction(step));
+        stepBox.addView(actionBtn);
+
+        return stepBox;
+    }
+
+    private void executeAssistantStepAction(OneUiAssistantGuide.AssistantStep step) {
+        if (step == null) {
+            return;
+        }
+        switch (step.action) {
+            case LAUNCH_PRO_MODE:
+                launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_PHOTO);
+                break;
+            case OPEN_CAMERA_SETTINGS:
+                ShootingModeMap.ModeDescriptor proDesc = ShootingModeMap.resolve(
+                        modelProfile, oneUiGeneration, ShootingModeMap.ModeKind.PRO_PHOTO);
+                String camMsg = OneUiSystemBridge.openCameraSettingsOrPro(this, proDesc);
+                onStatusChanged(camMsg);
+                Toast.makeText(this, camMsg, Toast.LENGTH_LONG).show();
+                break;
+            case OPEN_SIDE_KEY_SETTINGS:
+                String sideMsg = OneUiSystemBridge.openSideKeySettings(this);
+                onStatusChanged(sideMsg);
+                Toast.makeText(this, sideMsg, Toast.LENGTH_LONG).show();
+                break;
+            case VERIFY_RECOVERY:
+                executeQuickRecovery();
+                break;
+        }
+    }
+
+    private void refreshAssistantProgressBadge() {
+        if (assistantProgressBadge == null) {
+            return;
+        }
+        OneUiAssistantGuide.ProgressSummary summary =
+                OneUiAssistantGuide.computeProgress(assistantSteps, completedAssistantStepIds);
+        assistantProgressBadge.setText(summary.completedCount + "/" + summary.totalCount);
+        if (summary.allCompleted) {
+            assistantProgressBadge.setTextColor(Color.parseColor("#34D399"));
+            assistantProgressBadge.setBackground(createRoundedDrawable("#064E3B", "#059669", 10, 1));
+        } else {
+            assistantProgressBadge.setTextColor(Color.parseColor("#38BDF8"));
+            assistantProgressBadge.setBackground(createRoundedDrawable("#0F172A", "#1E3A5F", 10, 1));
+        }
     }
 
     /**
@@ -302,7 +622,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         card.setLayoutParams(cardLp);
 
         TextView header = new TextView(this);
-        header.setText("ATAJOS Y ACCESO RÁPIDO (v1.3.0)");
+        header.setText("ATAJOS Y ACCESO RÁPIDO");
         header.setTextColor(Color.parseColor("#38BDF8"));
         header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
@@ -601,7 +921,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
         if (!shortcutSpecs.isEmpty()) {
             String savedTileAction = RescuePreferences.loadQuickTileAction(this);
-            boolean actionStillActive = false;
+            boolean actionStillActive = CameraConfig.ACTION_QUICK_RECOVERY.equals(savedTileAction);
             for (RescueActionSpec spec : shortcutSpecs) {
                 if (spec.intentAction.equals(savedTileAction)) {
                     actionStillActive = true;
@@ -650,13 +970,13 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         }
         switch (spec.actionType) {
             case REAR_PRO_PHOTO:
-                launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO);
+                launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_PHOTO);
                 break;
             case REAR_QR_HUD:
                 launchRearQrWithFloatingHud();
                 break;
             case REAR_PRO_VIDEO:
-                launchSamsungRearMode(CameraConfig.MODE_PRO_VIDEO, CameraConfig.ACTIVITY_NAME_PRO_VIDEO);
+                launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_VIDEO);
                 break;
             case FRONT_CAMERA:
                 if (spec.sensorId != null && !spec.sensorId.trim().isEmpty()) {
@@ -772,9 +1092,29 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         ).show();
     }
 
-    private void cycleQuickTileTarget() {
-        List<RescueActionSpec> available =
+    private static final class QuickTileOption {
+        final String action;
+        final String label;
+
+        QuickTileOption(String action, String label) {
+            this.action = action;
+            this.label = label;
+        }
+    }
+
+    private List<QuickTileOption> buildQuickTileOptions() {
+        List<RescueActionSpec> specs =
                 DynamicUiBuilder.buildShortcutSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
+        List<QuickTileOption> options = new ArrayList<>();
+        for (RescueActionSpec spec : specs) {
+            options.add(new QuickTileOption(spec.intentAction, resolveShortcutLabel(spec)));
+        }
+        options.add(new QuickTileOption(CameraConfig.ACTION_QUICK_RECOVERY, "Recuperación"));
+        return options;
+    }
+
+    private void cycleQuickTileTarget() {
+        List<QuickTileOption> available = buildQuickTileOptions();
         if (available.isEmpty()) {
             Toast.makeText(this, "Activa al menos un sensor para configurar el Tile Rápido", Toast.LENGTH_SHORT).show();
             return;
@@ -782,16 +1122,15 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         String currentAction = RescuePreferences.loadQuickTileAction(this);
         int currentIndex = -1;
         for (int i = 0; i < available.size(); i++) {
-            if (available.get(i).intentAction.equals(currentAction)) {
+            if (available.get(i).action.equals(currentAction)) {
                 currentIndex = i;
                 break;
             }
         }
-        RescueActionSpec next = available.get((currentIndex + 1) % available.size());
-        String nextLabel = resolveShortcutLabel(next);
-        RescuePreferences.saveQuickTileAction(this, next.intentAction, nextLabel);
+        QuickTileOption next = available.get((currentIndex + 1) % available.size());
+        RescuePreferences.saveQuickTileAction(this, next.action, next.label);
         refreshShortcutsStatusViews();
-        Toast.makeText(this, "Tile Rápido actualizado a: " + nextLabel, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Tile Rápido actualizado a: " + next.label, Toast.LENGTH_SHORT).show();
     }
 
     private void refreshShortcutsStatusViews() {
@@ -934,21 +1273,16 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         return drawable;
     }
 
-    private void launchSamsungRearMode(String previousMode, String activityName) {
+    private void launchRearModeViaMap(ShootingModeMap.ModeKind kind) {
         frontCameraController.closeCameraOnly();
-        try {
-            Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.setComponent(new ComponentName(
-                    CameraConfig.SAMSUNG_CAMERA_PACKAGE,
-                    CameraConfig.SAMSUNG_CAMERA_ACTIVITY
-            ));
-            intent.putExtra(CameraConfig.EXTRA_PREVIOUS_MODE, previousMode);
-            intent.putExtra(CameraConfig.EXTRA_ACTIVITY_NAME, activityName);
-            intent.putExtra(CameraConfig.EXTRA_CAMERA_FACING, CameraConfig.FACING_BACK);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-        } catch (RuntimeException e) {
-            onError("No se pudo abrir Samsung Camera en modo " + previousMode + ": " + e.getMessage());
+        ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(modelProfile, oneUiGeneration, kind);
+        lastLaunchedRearMode = kind;
+        lastRearLaunchTimestampMs = System.currentTimeMillis();
+        recoveryAttemptAdvancedOnLaunch = false;
+        ShootingModeMap.LaunchVariant launched = OneUiSystemBridge.launchModeWithFallback(this, descriptor);
+        if (launched == null) {
+            lastRearLaunchTimestampMs = 0L;
+            onError("No se pudo abrir Samsung Camera en modo " + kind.name());
         }
     }
 
@@ -971,13 +1305,113 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         frontCameraController.closeCameraOnly();
         service.showHud();
 
-        try {
-            Intent qrIntent = new Intent(CameraConfig.ACTION_SCAN_QR_CODE);
-            qrIntent.setPackage(CameraConfig.SAMSUNG_CAMERA_PACKAGE);
-            qrIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            startActivity(qrIntent);
-        } catch (RuntimeException e) {
-            onError("No se pudo iniciar SCAN_QR_CODE: " + e.getMessage());
+        ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(
+                modelProfile, oneUiGeneration, ShootingModeMap.ModeKind.QR_SCANNER);
+        lastLaunchedRearMode = ShootingModeMap.ModeKind.QR_SCANNER;
+        lastRearLaunchTimestampMs = System.currentTimeMillis();
+        recoveryAttemptAdvancedOnLaunch = false;
+        ShootingModeMap.LaunchVariant launched = OneUiSystemBridge.launchModeWithFallback(this, descriptor);
+        if (launched == null) {
+            lastRearLaunchTimestampMs = 0L;
+            service.hideHud();
+            onError("No se pudo iniciar SCAN_QR_CODE de Samsung Camera.");
+        }
+    }
+
+    private void executeQuickRecovery() {
+        if (pendingRecoveryRunnable != null) {
+            recoveryHandler.removeCallbacks(pendingRecoveryRunnable);
+            pendingRecoveryRunnable = null;
+        }
+
+        CameraRecoveryEngine.RecoveryPlan plan = CameraRecoveryEngine.buildRecoveryPlan(
+                modelProfile, oneUiGeneration, lastLaunchedRearMode, recoveryAttemptIndex);
+
+        if (plan.shouldResetLocalSession) {
+            frontCameraController.stop();
+            RearCaptureService service = RearCaptureService.getInstance();
+            if (service != null) {
+                service.hideHud();
+            }
+        }
+
+        if (plan.action == CameraRecoveryEngine.RecoveryAction.OPEN_CAMERA_APP_INFO) {
+            boolean opened = OneUiSystemBridge.openSamsungCameraAppInfo(this);
+            if (!opened) {
+                onError("No se pudo abrir la información de Samsung Camera.");
+                return;
+            }
+            if (statusBanner != null) {
+                statusBanner.setTextColor(Color.parseColor("#F59E0B"));
+                statusBanner.setText("▲ " + plan.userMessage);
+            }
+            Toast.makeText(this, plan.userMessage, Toast.LENGTH_LONG).show();
+            recoveryAttemptIndex = 0;
+            recoveryAttemptAdvancedOnLaunch = false;
+            updateRecoveryCardState(false, plan.userMessage);
+            return;
+        }
+
+        if (statusBanner != null) {
+            statusBanner.setTextColor(Color.parseColor("#F59E0B"));
+            statusBanner.setText("⚡ " + plan.title);
+        }
+
+        pendingRecoveryRunnable = () -> {
+            pendingRecoveryRunnable = null;
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            lastRearLaunchTimestampMs = System.currentTimeMillis();
+            boolean launched = OneUiSystemBridge.launchVariant(this, plan.launchVariant);
+            if (!launched) {
+                lastRearLaunchTimestampMs = 0L;
+                recoveryAttemptAdvancedOnLaunch = false;
+                onError("No se pudo ejecutar " + plan.title);
+                return;
+            }
+            recoveryAttemptIndex = CameraRecoveryEngine.nextAttemptIndex(recoveryAttemptIndex, false);
+            recoveryAttemptAdvancedOnLaunch = true;
+            updateRecoveryCardState(false, null);
+        };
+        recoveryHandler.postDelayed(pendingRecoveryRunnable, plan.cooldownMs);
+    }
+
+    private void updateRecoveryCardState(boolean isLockupAlert, String customMessage) {
+        if (recoveryCard == null || recoveryStatusText == null || recoveryActionButton == null) {
+            return;
+        }
+        String borderHex = isLockupAlert ? "#F59E0B" : "#334155";
+        recoveryCard.setBackground(createRoundedDrawable("#111827", borderHex, 18, 1));
+
+        CameraRecoveryEngine.RecoveryPlan plan = CameraRecoveryEngine.buildRecoveryPlan(
+                modelProfile, oneUiGeneration, lastLaunchedRearMode, recoveryAttemptIndex);
+
+        recoveryActionButton.setText(resolveRecoveryButtonLabel(recoveryAttemptIndex));
+        String buttonHex = (isLockupAlert || recoveryAttemptIndex > 0) ? "#D97706" : "#0284C7";
+        recoveryActionButton.setBackground(createRoundedDrawable(buttonHex, buttonHex, 13, 0));
+
+        if (customMessage != null && !customMessage.trim().isEmpty()) {
+            recoveryStatusText.setText(customMessage);
+        } else if (recoveryAttemptIndex > 0) {
+            recoveryStatusText.setText(plan.title + " · " + plan.userMessage);
+        } else {
+            recoveryStatusText.setText("Si Samsung Camera se cierra o queda bloqueado por el sensor averiado, ejecuta la recuperación escalonada.");
+        }
+        recoveryStatusText.setTextColor(Color.parseColor(isLockupAlert ? "#FBBF24" : "#94A3B8"));
+    }
+
+    private static String resolveRecoveryButtonLabel(int attemptIndex) {
+        switch (attemptIndex) {
+            case 1:
+                return "⚡ Destrabar → Modo Pro Alt.";
+            case 2:
+                return "⚡ Aislar Sensor 1x (QR)";
+            case 3:
+                return "⚙ Abrir App Info (Forzar Detención)";
+            case 0:
+            default:
+                return "⚡ Destrabar Cámara → Modo Pro";
         }
     }
 
@@ -988,13 +1422,48 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         if (service != null) {
             service.hideHud();
         }
-        ensureCameraPermissionAndStartFrontPreview();
+        boolean lockupDetected = false;
+        if (lastRearLaunchTimestampMs > 0L) {
+            long launchTs = lastRearLaunchTimestampMs;
+            lastRearLaunchTimestampMs = 0L;
+            if (CameraRecoveryEngine.isSuspectedCrashReturn(launchTs, System.currentTimeMillis())) {
+                lockupDetected = true;
+                if (!recoveryAttemptAdvancedOnLaunch) {
+                    recoveryAttemptIndex = CameraRecoveryEngine.nextAttemptIndex(recoveryAttemptIndex, false);
+                }
+                recoveryAttemptAdvancedOnLaunch = false;
+                CameraRecoveryEngine.RecoveryPlan nextPlan = CameraRecoveryEngine.buildRecoveryPlan(
+                        modelProfile, oneUiGeneration, lastLaunchedRearMode, recoveryAttemptIndex);
+                updateRecoveryCardState(true, "Cierre rápido detectado. Siguiente paso: " + nextPlan.title);
+                if (statusBanner != null) {
+                    statusBanner.setTextColor(Color.parseColor("#F59E0B"));
+                    statusBanner.setText("▲ Retorno rápido detectado · Usa Recuperación Rápida (" + nextPlan.title + ")");
+                }
+            } else {
+                recoveryAttemptIndex = CameraRecoveryEngine.nextAttemptIndex(recoveryAttemptIndex, true);
+                recoveryAttemptAdvancedOnLaunch = false;
+                updateRecoveryCardState(false, null);
+            }
+        }
+        if (pendingRecoveryRunnable == null) {
+            ensureCameraPermissionAndStartFrontPreview();
+        }
+        if (lockupDetected && statusBanner != null) {
+            statusBanner.setTextColor(Color.parseColor("#F59E0B"));
+        }
     }
 
     @Override
     protected void onPause() {
         frontCameraController.stop();
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        recoveryHandler.removeCallbacksAndMessages(null);
+        pendingRecoveryRunnable = null;
+        super.onDestroy();
     }
 
     private void ensureCameraPermissionAndStartFrontPreview() {
@@ -1047,6 +1516,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         if (statusBanner != null) {
             statusBanner.setTextColor(Color.parseColor("#FCA5A5"));
             statusBanner.setText("▲ " + error);
+        }
+        if (CameraRecoveryEngine.isCameraErrorMessageLockup(error)) {
+            updateRecoveryCardState(true, "Posible bloqueo HAL detectado: " + error + ". Usa Recuperación Rápida.");
         }
         Toast.makeText(this, error, Toast.LENGTH_LONG).show();
     }

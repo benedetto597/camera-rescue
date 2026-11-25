@@ -26,12 +26,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Run Unit Tests (4 Pure Java Suites)
+      - name: Run Unit Tests (7 Pure Java Suites)
         run: |
           mkdir -p build/test-classes
           javac -encoding UTF-8 -d build/test-classes \
             app/src/main/java/com/s23plus/camera/CameraConfig.java \
             app/src/main/java/com/s23plus/camera/SamsungModelDatabase.java \
+            app/src/main/java/com/s23plus/camera/ShootingModeMap.java \
+            app/src/main/java/com/s23plus/camera/OneUiAssistantGuide.java \
+            app/src/main/java/com/s23plus/camera/CameraRecoveryEngine.java \
             app/src/main/java/com/s23plus/camera/SensorHealth.java \
             app/src/main/java/com/s23plus/camera/DiscoveredSensor.java \
             app/src/main/java/com/s23plus/camera/RescueActionSpec.java \
@@ -39,10 +42,16 @@ jobs:
             app/src/main/java/com/s23plus/camera/DynamicUiBuilder.java \
             app/src/test/java/com/s23plus/camera/CameraConfigTest.java \
             app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java \
+            app/src/test/java/com/s23plus/camera/ShootingModeMapTest.java \
+            app/src/test/java/com/s23plus/camera/OneUiAssistantGuideTest.java \
+            app/src/test/java/com/s23plus/camera/CameraRecoveryEngineTest.java \
             app/src/test/java/com/s23plus/camera/SensorSelectionStateTest.java \
             app/src/test/java/com/s23plus/camera/DynamicUiBuilderTest.java
           java -cp build/test-classes com.s23plus.camera.CameraConfigTest
           java -cp build/test-classes com.s23plus.camera.SamsungModelDatabaseTest
+          java -cp build/test-classes com.s23plus.camera.ShootingModeMapTest
+          java -cp build/test-classes com.s23plus.camera.OneUiAssistantGuideTest
+          java -cp build/test-classes com.s23plus.camera.CameraRecoveryEngineTest
           java -cp build/test-classes com.s23plus.camera.SensorSelectionStateTest
           java -cp build/test-classes com.s23plus.camera.DynamicUiBuilderTest
 
@@ -61,8 +70,8 @@ jobs:
             --manifest app/src/main/AndroidManifest.xml \
             --min-sdk-version 30 \
             --target-sdk-version 34 \
-            --version-code 4 \
-            --version-name "1.3.0" \
+            --version-code 5 \
+            --version-name "1.4.0" \
             -o build/apk-ci/unaligned.apk \
             --java build/apk-ci/gen \
             build/apk-ci/compiled_res/res.zip

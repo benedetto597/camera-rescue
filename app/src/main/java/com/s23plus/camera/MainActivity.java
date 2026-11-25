@@ -1,13 +1,14 @@
 package com.s23plus.camera;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.Intent;
+import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -27,30 +28,78 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * Actividad principal de Samsung Camera Rescue (v1.4.0).
+ * Actividad principal de Samsung Camera Rescue (v2.0.0).
  *
  * Incluye:
  * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase) y detección de One UI.
  * 2. Escáner de sensores on-device (SensorScanner) con selector interactivo de lentes funcionales.
- * 3. Visor Camera2 en vivo para sensores frontales funcionales adaptativo según selección.
+ * 3. Visor Camera2 universal integrado (frontal + trasera pública) con zoom, EV, flash/linterna,
+ *    apertura variable LENS_APERTURE, cuadrícula, temporizador y grabación MP4 transaccional.
  * 4. Tarjetas dinámicas de rescate vía ShootingModeMap, recuperación rápida de bloqueos,
- *    asistente colapsable One UI, accesos directos y Quick Settings Tile.
+ *    asistente colapsable One UI, accesos directos, Quick Settings Tile y perfiles .json vía SAF.
  */
-public final class MainActivity extends Activity implements FrontCameraController.StatusListener {
+public final class MainActivity extends Activity implements UniversalCameraController.Listener {
 
     private static final int REQUEST_CAMERA_PERMISSION = 1001;
+    private static final int REQUEST_AUDIO_PERMISSION = 1002;
+    private static final int REQUEST_EXPORT_PROFILE = 2001;
+    private static final int REQUEST_IMPORT_PROFILE = 2002;
+    private static final long COUNTDOWN_TICK_MS = 1000L;
 
-    private TextureView frontPreviewView;
+    private ScrollView rootScroll;
+    private LinearLayout viewerCard;
+    private TextureView viewerPreviewView;
+    private ViewfinderGridOverlay gridOverlayView;
     private TextView statusBanner;
     private TextView lensOverlayBadge;
+    private TextView recordingTimerBadge;
+    private TextView countdownOverlayText;
+
+    private Button zoomOutButton;
+    private Button zoomPresetButton;
+    private Button zoomInButton;
+    private Button evMinusButton;
+    private TextView evValueLabel;
+    private Button evPlusButton;
+    private Button flashButton;
+    private Button timerButton;
+    private Button gridButton;
+    private Button apertureButton;
+    private Button capturePhotoButton;
+    private Button recordVideoButton;
     private Button switchLensButton;
-    private FrontCameraController frontCameraController;
+    private Button testPublicRearButton;
+
+    private UniversalCameraController universalCameraController;
+
+    // Preferencias y estado del visor Camera2 universal (v2.0.0)
+    private String viewerPreferredCameraId = CameraConfig.FRONT_CAMERA_WIDE_ID;
+    private CameraViewerMath.GridMode viewerGridMode = CameraViewerMath.GridMode.OFF;
+    private int viewerTimerSeconds = 0;
+    private CameraViewerMath.FlashMode viewerFlashMode = CameraViewerMath.FlashMode.OFF;
+    private float viewerPreferredAperture = CameraViewerMath.ApertureCapabilities.APERTURE_AUTO;
+    private boolean pendingApplySavedFlash = true;
+    private boolean pendingApplySavedAperture = true;
+    private boolean currentCameraOpenedSuccessfully = false;
+
+    private final Handler countdownHandler = new Handler(Looper.getMainLooper());
+    private Runnable countdownRunnable;
+    private int countdownRemainingSeconds = 0;
+    private boolean audioPermissionDeniedThisSession = false;
+    private boolean pendingVideoRecordAfterAudioPrompt = false;
 
     // Componentes del motor de diagnóstico y selector dinámico (v1.2.0 - v1.3.0)
     private SamsungModelDatabase.ModelProfile modelProfile;
@@ -62,7 +111,8 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private List<DiscoveredSensor> lastScannedSensors = new ArrayList<>();
     private Set<String> selectedSensorIds = new LinkedHashSet<>();
     private List<RescueActionSpec> currentRearSpecs = new ArrayList<>();
-    private List<DiscoveredSensor> activeFrontSensors = new ArrayList<>();
+    private List<DiscoveredSensor> activeViewerSensors = new ArrayList<>();
+    private List<DiscoveredSensor> activePublicRearSensors = new ArrayList<>();
     private LinearLayout rearCardsContainer;
     private TextView shortcutsStatusView;
     private Button quickTileTargetButton;
@@ -72,6 +122,8 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private ShootingModeMap.OneUiGeneration oneUiGeneration;
     private List<OneUiAssistantGuide.AssistantStep> assistantSteps = new ArrayList<>();
     private Set<String> completedAssistantStepIds = new LinkedHashSet<>();
+    private final Map<String, CheckBox> assistantStepCheckBoxes = new LinkedHashMap<>();
+    private boolean suppressAssistantCheckCallbacks = false;
     private final Handler recoveryHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingRecoveryRunnable;
     private long lastRearLaunchTimestampMs = 0L;
@@ -85,6 +137,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private TextView assistantProgressBadge;
     private LinearLayout assistantStepsContainer;
     private Button assistantToggleButton;
+
+    // Tarjeta de exportación / importación offline .json vía SAF (v2.0.0)
+    private TextView profileStatusText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,7 +155,13 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 assistantSteps
         );
         sensorScanner = new SensorScanner(this);
-        frontCameraController = new FrontCameraController(this, this);
+
+        DiagnosticProfileCodec.ViewerPreferencesSnapshot loadedViewerPrefs =
+                RescuePreferences.loadViewerPreferences(this);
+        applyViewerPreferencesSnapshot(loadedViewerPrefs, false);
+
+        universalCameraController = new UniversalCameraController(this, this);
+        universalCameraController.setCurrentCameraId(viewerPreferredCameraId);
 
         Set<String> saved = RescuePreferences.loadSelectedSensorIds(this);
         if (saved != null) {
@@ -136,22 +197,32 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         } else if (CameraConfig.ACTION_QUICK_RECOVERY.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
             executeQuickRecovery();
-        } else if (CameraConfig.ACTION_LAUNCH_FRONT.equals(action)) {
+        } else if (CameraConfig.ACTION_LAUNCH_FRONT.equals(action)
+                || CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER.equals(action)) {
             String sensorId = intent.getStringExtra(CameraConfig.EXTRA_SHORTCUT_SENSOR_ID);
+            boolean isIntegratedViewer = CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER.equals(action);
             setIntent(new Intent(Intent.ACTION_MAIN));
             if (sensorId != null && !sensorId.trim().isEmpty()) {
                 String trimmedId = sensorId.trim();
-                frontCameraController.switchToCameraId(trimmedId, frontPreviewView, getDisplayRotationCompat());
-                updateFrontLensLabels(trimmedId);
-                onStatusChanged("Atajo frontal activado (ID " + trimmedId + ")");
+                switchViewerToCameraId(trimmedId, true);
+                onStatusChanged((isIntegratedViewer ? "Visor integrado activado (ID " : "Atajo frontal activado (ID ")
+                        + trimmedId + ")");
             } else {
-                onStatusChanged("Atajo frontal activado");
+                ensureCameraPermissionAndStartViewerPreview();
+                onStatusChanged(isIntegratedViewer ? "Visor Camera2 universal activado" : "Atajo frontal activado");
             }
+            focusViewerCard();
+        }
+    }
+
+    private void focusViewerCard() {
+        if (rootScroll != null && viewerCard != null) {
+            rootScroll.post(() -> rootScroll.smoothScrollTo(0, viewerCard.getTop()));
         }
     }
 
     private void buildModernUserInterface() {
-        ScrollView rootScroll = new ScrollView(this);
+        rootScroll = new ScrollView(this);
         rootScroll.setFillViewport(true);
         rootScroll.setBackgroundColor(Color.parseColor("#070B12"));
 
@@ -212,84 +283,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         // 2. Tarjeta del Motor de Diagnóstico y Escáner (v1.2.0)
         root.addView(buildDiagnosticCard());
 
-        // 3. Tarjeta del Visor Frontal Camera2
-        LinearLayout frontCard = new LinearLayout(this);
-        frontCard.setOrientation(LinearLayout.VERTICAL);
-        int cardPad = dpToPx(10);
-        frontCard.setPadding(cardPad, cardPad, cardPad, cardPad);
-        frontCard.setBackground(createRoundedDrawable("#111827", "#1F2937", 20, 1));
-
-        FrameLayout previewFrame = new FrameLayout(this);
-        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(280));
-        previewFrame.setLayoutParams(previewParams);
-        previewFrame.setBackground(createRoundedDrawable("#090D16", "#334155", 16, 1));
-
-        frontPreviewView = new TextureView(this);
-        FrameLayout.LayoutParams textureLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        int innerMargin = dpToPx(3);
-        textureLp.setMargins(innerMargin, innerMargin, innerMargin, innerMargin);
-        frontPreviewView.setLayoutParams(textureLp);
-        previewFrame.addView(frontPreviewView);
-
-        lensOverlayBadge = new TextView(this);
-        lensOverlayBadge.setText("Frontal ID 1 · 12 MP");
-        lensOverlayBadge.setTextColor(Color.parseColor("#E2E8F0"));
-        lensOverlayBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        lensOverlayBadge.setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4));
-        lensOverlayBadge.setBackground(createRoundedDrawable("#BF0F172A", "#38BDF8", 10, 1));
-        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        badgeLp.gravity = Gravity.TOP | Gravity.START;
-        badgeLp.setMargins(dpToPx(12), dpToPx(12), 0, 0);
-        lensOverlayBadge.setLayoutParams(badgeLp);
-        previewFrame.addView(lensOverlayBadge);
-
-        frontCard.addView(previewFrame);
-
-        // Controles cortos del visor frontal + botón desplegable (▾)
-        LinearLayout frontControlsRow = new LinearLayout(this);
-        frontControlsRow.setOrientation(LinearLayout.HORIZONTAL);
-        frontControlsRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams controlsLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        controlsLp.topMargin = dpToPx(10);
-        frontControlsRow.setLayoutParams(controlsLp);
-
-        Button takeSelfieBtn = createShortButton(
-                CameraConfig.BTN_FRONT_SHUTTER_SHORT,
-                "#059669",
-                "#FFFFFF",
-                true
-        );
-        LinearLayout.LayoutParams selfieLp = new LinearLayout.LayoutParams(
-                0, dpToPx(46), 1.15f);
-        selfieLp.rightMargin = dpToPx(6);
-        takeSelfieBtn.setLayoutParams(selfieLp);
-        takeSelfieBtn.setOnClickListener(v -> frontCameraController.capturePhoto(getDisplayRotationCompat()));
-        frontControlsRow.addView(takeSelfieBtn);
-
-        switchLensButton = createShortButton(
-                "Lente 8.6 MP",
-                "#1E293B",
-                "#7DD3FC",
-                false
-        );
-        LinearLayout.LayoutParams switchLp = new LinearLayout.LayoutParams(
-                0, dpToPx(46), 0.85f);
-        switchLp.rightMargin = dpToPx(6);
-        switchLensButton.setLayoutParams(switchLp);
-        switchLensButton.setOnClickListener(v -> onSwitchFrontLensClicked());
-        frontControlsRow.addView(switchLensButton);
-
-        TextView frontTechView = createTechDescriptionView(CameraConfig.TECH_DESC_FRONT);
-        Button frontArrowBtn = createArrowToggleButton(frontTechView);
-        frontControlsRow.addView(frontArrowBtn);
-
-        frontCard.addView(frontControlsRow);
-        frontCard.addView(frontTechView);
-        root.addView(frontCard);
+        // 3. Tarjeta del Visor Camera2 Universal (v2.0.0)
+        viewerCard = buildUniversalViewerCard();
+        root.addView(viewerCard);
 
         // 4. Encabezado de Sección Trasera
         TextView rearSectionHeader = new TextView(this);
@@ -318,8 +314,277 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         // 7. Tarjeta de Atajos Dinámicos y Quick Settings Tile
         root.addView(buildShortcutsAndTileCard());
 
+        // 8. Tarjeta de Perfil Offline (.json · SAF) (v2.0.0)
+        root.addView(buildOfflineProfileCard());
+
         rootScroll.addView(root);
         setContentView(rootScroll);
+    }
+
+    /**
+     * Construye la tarjeta unificada del Visor Camera2 Universal (sensores frontales y traseros públicos).
+     */
+    private LinearLayout buildUniversalViewerCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int cardPad = dpToPx(10);
+        card.setPadding(cardPad, cardPad, cardPad, cardPad);
+        card.setBackground(createRoundedDrawable("#111827", "#1F2937", 20, 1));
+
+        TextView viewerHeader = new TextView(this);
+        viewerHeader.setText("VISOR CAMERA2 UNIVERSAL · FRONTAL Y TRASERA PÚBLICA");
+        viewerHeader.setTextColor(Color.parseColor("#38BDF8"));
+        viewerHeader.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        viewerHeader.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headerLp.bottomMargin = dpToPx(8);
+        viewerHeader.setLayoutParams(headerLp);
+        card.addView(viewerHeader);
+
+        // Marco de vista previa + cuadrícula + insignias + temporizador
+        FrameLayout previewFrame = new FrameLayout(this);
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(290));
+        previewFrame.setLayoutParams(previewParams);
+        previewFrame.setBackground(createRoundedDrawable("#090D16", "#334155", 16, 1));
+
+        viewerPreviewView = new TextureView(this);
+        FrameLayout.LayoutParams textureLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        int innerMargin = dpToPx(3);
+        textureLp.setMargins(innerMargin, innerMargin, innerMargin, innerMargin);
+        viewerPreviewView.setLayoutParams(textureLp);
+        previewFrame.addView(viewerPreviewView);
+
+        gridOverlayView = new ViewfinderGridOverlay(this);
+        FrameLayout.LayoutParams gridLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        gridLp.setMargins(innerMargin, innerMargin, innerMargin, innerMargin);
+        gridOverlayView.setLayoutParams(gridLp);
+        gridOverlayView.setGridMode(viewerGridMode);
+        previewFrame.addView(gridOverlayView);
+
+        lensOverlayBadge = new TextView(this);
+        lensOverlayBadge.setText("Frontal ID 1 · 12 MP");
+        lensOverlayBadge.setTextColor(Color.parseColor("#E2E8F0"));
+        lensOverlayBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        lensOverlayBadge.setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4));
+        lensOverlayBadge.setBackground(createRoundedDrawable("#BF0F172A", "#38BDF8", 10, 1));
+        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        badgeLp.gravity = Gravity.TOP | Gravity.START;
+        badgeLp.setMargins(dpToPx(12), dpToPx(12), 0, 0);
+        lensOverlayBadge.setLayoutParams(badgeLp);
+        previewFrame.addView(lensOverlayBadge);
+
+        recordingTimerBadge = new TextView(this);
+        recordingTimerBadge.setText("● REC 00:00");
+        recordingTimerBadge.setTextColor(Color.parseColor("#FFFFFF"));
+        recordingTimerBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        recordingTimerBadge.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        recordingTimerBadge.setPadding(dpToPx(10), dpToPx(4), dpToPx(10), dpToPx(4));
+        recordingTimerBadge.setBackground(createRoundedDrawable("#CCDC2626", "#FCA5A5", 10, 1));
+        FrameLayout.LayoutParams recBadgeLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        recBadgeLp.gravity = Gravity.TOP | Gravity.END;
+        recBadgeLp.setMargins(0, dpToPx(12), dpToPx(12), 0);
+        recordingTimerBadge.setLayoutParams(recBadgeLp);
+        recordingTimerBadge.setVisibility(View.GONE);
+        previewFrame.addView(recordingTimerBadge);
+
+        countdownOverlayText = new TextView(this);
+        countdownOverlayText.setText("3");
+        countdownOverlayText.setTextColor(Color.parseColor("#FFFFFF"));
+        countdownOverlayText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 52);
+        countdownOverlayText.setTypeface(Typeface.DEFAULT_BOLD);
+        countdownOverlayText.setGravity(Gravity.CENTER);
+        countdownOverlayText.setPadding(dpToPx(24), dpToPx(10), dpToPx(24), dpToPx(10));
+        countdownOverlayText.setBackground(createRoundedDrawable("#A6090D16", "#38BDF8", 22, 1));
+        FrameLayout.LayoutParams countLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        countLp.gravity = Gravity.CENTER;
+        countdownOverlayText.setLayoutParams(countLp);
+        countdownOverlayText.setVisibility(View.GONE);
+        previewFrame.addView(countdownOverlayText);
+
+        card.addView(previewFrame);
+
+        // Fila de Zoom (− / 1.0x / +)
+        LinearLayout zoomRow = new LinearLayout(this);
+        zoomRow.setOrientation(LinearLayout.HORIZONTAL);
+        zoomRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams zoomRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        zoomRowLp.topMargin = dpToPx(10);
+        zoomRow.setLayoutParams(zoomRowLp);
+
+        zoomOutButton = createCompactButton("−", "#0F172A", "#334155", "#E2E8F0", 15, true);
+        LinearLayout.LayoutParams zoomBtnLp = new LinearLayout.LayoutParams(0, dpToPx(38), 1.0f);
+        zoomBtnLp.rightMargin = dpToPx(6);
+        zoomOutButton.setLayoutParams(zoomBtnLp);
+        zoomOutButton.setOnClickListener(v -> universalCameraController.stepZoom(-0.5f));
+        zoomRow.addView(zoomOutButton);
+
+        zoomPresetButton = createCompactButton("1.0x", "#1E293B", "#38BDF8", "#7DD3FC", 13, true);
+        LinearLayout.LayoutParams zoomPresetLp = new LinearLayout.LayoutParams(0, dpToPx(38), 1.2f);
+        zoomPresetLp.rightMargin = dpToPx(6);
+        zoomPresetButton.setLayoutParams(zoomPresetLp);
+        zoomPresetButton.setOnClickListener(v -> universalCameraController.cycleZoomPreset());
+        zoomRow.addView(zoomPresetButton);
+
+        zoomInButton = createCompactButton("+", "#0F172A", "#334155", "#E2E8F0", 15, true);
+        zoomInButton.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(38), 1.0f));
+        zoomInButton.setOnClickListener(v -> universalCameraController.stepZoom(0.5f));
+        zoomRow.addView(zoomInButton);
+        card.addView(zoomRow);
+
+        // Controles de Captura: Fila A (EV − / +0.0 EV / EV + / Flash)
+        LinearLayout evFlashRow = new LinearLayout(this);
+        evFlashRow.setOrientation(LinearLayout.HORIZONTAL);
+        evFlashRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams evFlashLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        evFlashLp.topMargin = dpToPx(8);
+        evFlashRow.setLayoutParams(evFlashLp);
+
+        evMinusButton = createCompactButton("EV −", "#0F172A", "#334155", "#CBD5E1", 12, true);
+        LinearLayout.LayoutParams evBtnLp = new LinearLayout.LayoutParams(0, dpToPx(38), 0.9f);
+        evBtnLp.rightMargin = dpToPx(6);
+        evMinusButton.setLayoutParams(evBtnLp);
+        evMinusButton.setOnClickListener(v -> universalCameraController.stepEv(-1));
+        evFlashRow.addView(evMinusButton);
+
+        evValueLabel = new TextView(this);
+        evValueLabel.setText("+0.0 EV");
+        evValueLabel.setTextColor(Color.parseColor("#E2E8F0"));
+        evValueLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        evValueLabel.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        evValueLabel.setGravity(Gravity.CENTER);
+        evValueLabel.setBackground(createRoundedDrawable("#090D16", "#1E293B", 11, 1));
+        LinearLayout.LayoutParams evValLp = new LinearLayout.LayoutParams(0, dpToPx(38), 1.05f);
+        evValLp.rightMargin = dpToPx(6);
+        evValueLabel.setLayoutParams(evValLp);
+        evFlashRow.addView(evValueLabel);
+
+        evPlusButton = createCompactButton("EV +", "#0F172A", "#334155", "#CBD5E1", 12, true);
+        LinearLayout.LayoutParams evPlusLp = new LinearLayout.LayoutParams(0, dpToPx(38), 0.9f);
+        evPlusLp.rightMargin = dpToPx(6);
+        evPlusButton.setLayoutParams(evPlusLp);
+        evPlusButton.setOnClickListener(v -> universalCameraController.stepEv(1));
+        evFlashRow.addView(evPlusButton);
+
+        flashButton = createCompactButton("⚡ Off", "#1E293B", "#334155", "#FDE68A", 12, true);
+        flashButton.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(38), 1.15f));
+        flashButton.setOnClickListener(v -> onFlashButtonClicked());
+        evFlashRow.addView(flashButton);
+        card.addView(evFlashRow);
+
+        // Controles de Captura: Fila B (Temporizador / Cuadrícula / Apertura variable)
+        LinearLayout captureExtrasRow = new LinearLayout(this);
+        captureExtrasRow.setOrientation(LinearLayout.HORIZONTAL);
+        captureExtrasRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams extrasLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        extrasLp.topMargin = dpToPx(8);
+        captureExtrasRow.setLayoutParams(extrasLp);
+
+        timerButton = createCompactButton("⏱ Off", "#0F172A", "#334155", "#CBD5E1", 12, true);
+        LinearLayout.LayoutParams timerLp = new LinearLayout.LayoutParams(0, dpToPx(38), 0.95f);
+        timerLp.rightMargin = dpToPx(6);
+        timerButton.setLayoutParams(timerLp);
+        timerButton.setOnClickListener(v -> onTimerButtonClicked());
+        captureExtrasRow.addView(timerButton);
+
+        gridButton = createCompactButton("⊞ Sin guía", "#0F172A", "#334155", "#CBD5E1", 12, true);
+        LinearLayout.LayoutParams gridBtnLp = new LinearLayout.LayoutParams(0, dpToPx(38), 1.05f);
+        gridBtnLp.rightMargin = dpToPx(6);
+        gridButton.setLayoutParams(gridBtnLp);
+        gridButton.setOnClickListener(v -> onGridButtonClicked());
+        captureExtrasRow.addView(gridButton);
+
+        apertureButton = createCompactButton("◉ f/Auto", "#1E293B", "#38BDF8", "#7DD3FC", 11, true);
+        apertureButton.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(38), 1.25f));
+        apertureButton.setOnClickListener(v -> onApertureButtonClicked());
+        captureExtrasRow.addView(apertureButton);
+        card.addView(captureExtrasRow);
+
+        // Fila principal de captura: Foto / Grabar MP4 / Desplegable técnico (▾)
+        LinearLayout primaryCaptureRow = new LinearLayout(this);
+        primaryCaptureRow.setOrientation(LinearLayout.HORIZONTAL);
+        primaryCaptureRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams primaryLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        primaryLp.topMargin = dpToPx(10);
+        primaryCaptureRow.setLayoutParams(primaryLp);
+
+        capturePhotoButton = createShortButton(
+                CameraConfig.BTN_VIEWER_PHOTO_SHORT,
+                "#059669",
+                "#FFFFFF",
+                true
+        );
+        LinearLayout.LayoutParams photoLp = new LinearLayout.LayoutParams(0, dpToPx(46), 1.0f);
+        photoLp.rightMargin = dpToPx(6);
+        capturePhotoButton.setLayoutParams(photoLp);
+        capturePhotoButton.setOnClickListener(v -> onCapturePhotoClicked());
+        primaryCaptureRow.addView(capturePhotoButton);
+
+        recordVideoButton = createShortButton(
+                CameraConfig.BTN_VIEWER_VIDEO_SHORT,
+                "#1E293B",
+                "#FCA5A5",
+                true
+        );
+        LinearLayout.LayoutParams videoLp = new LinearLayout.LayoutParams(0, dpToPx(46), 1.15f);
+        videoLp.rightMargin = dpToPx(6);
+        recordVideoButton.setLayoutParams(videoLp);
+        recordVideoButton.setOnClickListener(v -> onRecordVideoClicked());
+        primaryCaptureRow.addView(recordVideoButton);
+
+        TextView viewerTechView = createTechDescriptionView(CameraConfig.TECH_DESC_UNIVERSAL_VIEWER);
+        Button viewerArrowBtn = createArrowToggleButton(viewerTechView);
+        primaryCaptureRow.addView(viewerArrowBtn);
+        card.addView(primaryCaptureRow);
+
+        // Fila secundaria de lentes: Cambiar Lente + Probar Trasera Pública en Visor
+        LinearLayout lensRow = new LinearLayout(this);
+        lensRow.setOrientation(LinearLayout.HORIZONTAL);
+        lensRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams lensRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lensRowLp.topMargin = dpToPx(8);
+        lensRow.setLayoutParams(lensRowLp);
+
+        switchLensButton = createCompactButton("Lente 8.6 MP", "#1E293B", "#334155", "#7DD3FC", 12, true);
+        LinearLayout.LayoutParams switchLp = new LinearLayout.LayoutParams(0, dpToPx(42), 0.9f);
+        switchLp.rightMargin = dpToPx(6);
+        switchLensButton.setLayoutParams(switchLp);
+        switchLensButton.setOnClickListener(v -> onSwitchViewerLensClicked());
+        lensRow.addView(switchLensButton);
+
+        testPublicRearButton = createCompactButton(
+                "📷 Probar Trasera Pública en Visor",
+                "#0F172A",
+                "#1E3A5F",
+                "#38BDF8",
+                12,
+                true
+        );
+        testPublicRearButton.setLayoutParams(new LinearLayout.LayoutParams(0, dpToPx(42), 1.25f));
+        testPublicRearButton.setOnClickListener(v -> onTestPublicRearClicked());
+        lensRow.addView(testPublicRearButton);
+        card.addView(lensRow);
+
+        card.addView(viewerTechView);
+
+        // Inicializar etiquetas acorde a las preferencias guardadas
+        updateTimerButtonLabel();
+        updateGridButtonLabel();
+        updateFlashButtonUi(false, viewerFlashMode);
+        updateApertureButtonUi(null);
+        updateViewerLensLabels(viewerPreferredCameraId);
+        return card;
     }
 
     /**
@@ -379,8 +644,10 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         resetLp.rightMargin = dpToPx(8);
         resetPreviewBtn.setLayoutParams(resetLp);
         resetPreviewBtn.setOnClickListener(v -> {
-            frontCameraController.stop();
-            ensureCameraPermissionAndStartFrontPreview();
+            cancelCountdown(false);
+            universalCameraController.stop();
+            updateRecordingUi(false, 0L, null);
+            ensureCameraPermissionAndStartViewerPreview();
             recoveryAttemptIndex = 0;
             recoveryAttemptAdvancedOnLaunch = false;
             updateRecoveryCardState(false, "Visor Camera2 local reiniciado.");
@@ -470,6 +737,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         stepsLp.topMargin = dpToPx(10);
         assistantStepsContainer.setLayoutParams(stepsLp);
 
+        assistantStepCheckBoxes.clear();
         for (OneUiAssistantGuide.AssistantStep step : assistantSteps) {
             assistantStepsContainer.addView(buildAssistantStepView(step));
         }
@@ -514,6 +782,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         cbLp.rightMargin = dpToPx(6);
         checkBox.setLayoutParams(cbLp);
         checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (suppressAssistantCheckCallbacks) {
+                return;
+            }
             if (isChecked) {
                 completedAssistantStepIds.add(step.id);
             } else {
@@ -522,6 +793,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             RescuePreferences.saveAssistantCompletedSteps(MainActivity.this, completedAssistantStepIds);
             refreshAssistantProgressBadge();
         });
+        assistantStepCheckBoxes.put(step.id, checkBox);
         topRow.addView(checkBox);
 
         TextView titleView = new TextView(this);
@@ -563,6 +835,18 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         stepBox.addView(actionBtn);
 
         return stepBox;
+    }
+
+    private void refreshAssistantStepsUi() {
+        suppressAssistantCheckCallbacks = true;
+        try {
+            for (Map.Entry<String, CheckBox> entry : assistantStepCheckBoxes.entrySet()) {
+                entry.getValue().setChecked(completedAssistantStepIds.contains(entry.getKey()));
+            }
+        } finally {
+            suppressAssistantCheckCallbacks = false;
+        }
+        refreshAssistantProgressBadge();
     }
 
     private void executeAssistantStepAction(OneUiAssistantGuide.AssistantStep step) {
@@ -659,6 +943,60 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         quickTileTargetButton.setLayoutParams(tileLp);
         quickTileTargetButton.setOnClickListener(v -> cycleQuickTileTarget());
         actionsRow.addView(quickTileTargetButton);
+
+        card.addView(actionsRow);
+        return card;
+    }
+
+    /**
+     * Construye la tarjeta de exportación e importación offline de perfiles .json vía SAF.
+     */
+    private LinearLayout buildOfflineProfileCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        card.setPadding(pad, pad, pad, pad);
+        card.setBackground(createRoundedDrawable("#111827", "#1F2937", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.topMargin = dpToPx(10);
+        card.setLayoutParams(cardLp);
+
+        TextView header = new TextView(this);
+        header.setText("PERFIL OFFLINE (.JSON · SAF)");
+        header.setTextColor(Color.parseColor("#38BDF8"));
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        card.addView(header);
+
+        profileStatusText = new TextView(this);
+        profileStatusText.setText("Respalda o restaura sensores diagnosticados, visor Camera2 y asistente sin conexión.");
+        profileStatusText.setTextColor(Color.parseColor("#94A3B8"));
+        profileStatusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusLp.topMargin = dpToPx(4);
+        statusLp.bottomMargin = dpToPx(10);
+        profileStatusText.setLayoutParams(statusLp);
+        card.addView(profileStatusText);
+
+        LinearLayout actionsRow = new LinearLayout(this);
+        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionsRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button exportBtn = createShortButton("⬇ Exportar .json", "#0F172A", "#38BDF8", true);
+        exportBtn.setBackground(createRoundedDrawable("#0F172A", "#1E3A5F", 13, 1));
+        LinearLayout.LayoutParams exportLp = new LinearLayout.LayoutParams(0, dpToPx(44), 1.0f);
+        exportLp.rightMargin = dpToPx(8);
+        exportBtn.setLayoutParams(exportLp);
+        exportBtn.setOnClickListener(v -> launchSafExportProfile());
+        actionsRow.addView(exportBtn);
+
+        Button importBtn = createShortButton("⬆ Importar .json", "#1E293B", "#E2E8F0", true);
+        LinearLayout.LayoutParams importLp = new LinearLayout.LayoutParams(0, dpToPx(44), 1.0f);
+        importBtn.setLayoutParams(importLp);
+        importBtn.setOnClickListener(v -> launchSafImportProfile());
+        actionsRow.addView(importBtn);
 
         card.addView(actionsRow);
         return card;
@@ -913,7 +1251,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             }
         }
 
-        updateFrontControlsAfterSelection();
+        updateViewerControlsAfterSelection();
 
         List<RescueActionSpec> shortcutSpecs =
                 DynamicUiBuilder.buildShortcutSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
@@ -921,7 +1259,8 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
         if (!shortcutSpecs.isEmpty()) {
             String savedTileAction = RescuePreferences.loadQuickTileAction(this);
-            boolean actionStillActive = CameraConfig.ACTION_QUICK_RECOVERY.equals(savedTileAction);
+            boolean actionStillActive = CameraConfig.ACTION_QUICK_RECOVERY.equals(savedTileAction)
+                    || CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER.equals(savedTileAction);
             for (RescueActionSpec spec : shortcutSpecs) {
                 if (spec.intentAction.equals(savedTileAction)) {
                     actionStillActive = true;
@@ -955,7 +1294,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         card.addView(title);
 
         TextView explanation = new TextView(this);
-        explanation.setText("Marca al menos un sensor trasero funcional en el diagnóstico superior para habilitar las tarjetas traseras, o usa el visor frontal Camera2.");
+        explanation.setText("Marca al menos un sensor trasero funcional en el diagnóstico superior para habilitar las tarjetas traseras, o usa el visor Camera2 universal.");
         explanation.setTextColor(Color.parseColor("#CBD5E1"));
         explanation.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         explanation.setPadding(0, dpToPx(6), 0, 0);
@@ -980,92 +1319,654 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 break;
             case FRONT_CAMERA:
                 if (spec.sensorId != null && !spec.sensorId.trim().isEmpty()) {
-                    frontCameraController.switchToCameraId(spec.sensorId.trim(), frontPreviewView, getDisplayRotationCompat());
-                    updateFrontLensLabels(spec.sensorId.trim());
+                    switchViewerToCameraId(spec.sensorId.trim(), true);
+                    focusViewerCard();
                 }
                 break;
         }
     }
 
-    private void updateFrontControlsAfterSelection() {
-        if (lastScannedSensors.isEmpty() || switchLensButton == null || lensOverlayBadge == null) {
-            return;
-        }
-        activeFrontSensors = DynamicUiBuilder.getSelectableFrontSensors(lastScannedSensors, selectedSensorIds);
-        if (activeFrontSensors.isEmpty()) {
-            switchLensButton.setEnabled(false);
-            switchLensButton.setAlpha(0.55f);
-            switchLensButton.setText("Sin frontal activa");
-            lensOverlayBadge.setText("Frontal desactivada en checklist");
-            return;
-        }
-
-        String currentId = frontCameraController.getCurrentCameraId();
-        if (findSensorIndexById(activeFrontSensors, currentId) < 0) {
-            String targetId = activeFrontSensors.get(0).id;
-            if (frontPreviewView != null && frontPreviewView.isAvailable()) {
-                frontCameraController.switchToCameraId(targetId, frontPreviewView, getDisplayRotationCompat());
-            } else {
-                frontCameraController.setCurrentCameraId(targetId);
-            }
-            currentId = targetId;
-        }
-        updateFrontLensLabels(currentId);
-    }
-
-    private void onSwitchFrontLensClicked() {
-        if (!activeFrontSensors.isEmpty()) {
-            if (activeFrontSensors.size() < 2) {
-                return;
-            }
-            int idx = findSensorIndexById(activeFrontSensors, frontCameraController.getCurrentCameraId());
-            DiscoveredSensor next = activeFrontSensors.get((idx + 1) % activeFrontSensors.size());
-            frontCameraController.switchToCameraId(next.id, frontPreviewView, getDisplayRotationCompat());
-            updateFrontLensLabels(next.id);
-            return;
-        }
-        frontCameraController.switchFrontCamera(frontPreviewView, getDisplayRotationCompat());
-        updateFrontLensLabels(frontCameraController.getCurrentCameraId());
-    }
-
-    private void updateFrontLensLabels(String activeId) {
+    private void updateViewerControlsAfterSelection() {
         if (switchLensButton == null || lensOverlayBadge == null) {
             return;
         }
-        if (!activeFrontSensors.isEmpty()) {
-            if (activeFrontSensors.size() == 1) {
-                DiscoveredSensor only = activeFrontSensors.get(0);
-                switchLensButton.setEnabled(false);
-                switchLensButton.setAlpha(0.65f);
-                switchLensButton.setText("1 lente frontal");
-                lensOverlayBadge.setText("Frontal ID " + only.id + " · " + only.getResolutionMegaPixels());
-                return;
-            }
-            int idx = findSensorIndexById(activeFrontSensors, activeId);
-            if (idx < 0) {
-                idx = 0;
-            }
-            DiscoveredSensor current = activeFrontSensors.get(idx);
-            DiscoveredSensor next = activeFrontSensors.get((idx + 1) % activeFrontSensors.size());
-            switchLensButton.setEnabled(true);
-            switchLensButton.setAlpha(1.0f);
-            String nextMp = next.getResolutionMegaPixels();
-            switchLensButton.setText("N/D".equals(nextMp) ? "Lente ID " + next.id : "Lente " + nextMp);
-            lensOverlayBadge.setText("Frontal ID " + current.id + " · " + current.getResolutionMegaPixels());
+        if (lastScannedSensors.isEmpty()) {
+            activeViewerSensors = new ArrayList<>();
+            activePublicRearSensors = new ArrayList<>();
+            updateViewerLensLabels(universalCameraController.getCurrentCameraId());
             return;
         }
 
-        switchLensButton.setEnabled(true);
-        switchLensButton.setAlpha(1.0f);
+        activeViewerSensors = DynamicUiBuilder.getSelectablePublicViewerSensors(lastScannedSensors, selectedSensorIds);
+        activePublicRearSensors = DynamicUiBuilder.getSelectablePublicRearSensors(lastScannedSensors, selectedSensorIds);
+
+        if (activeViewerSensors.isEmpty()) {
+            switchLensButton.setEnabled(false);
+            switchLensButton.setAlpha(0.55f);
+            switchLensButton.setText("Sin sensores en visor");
+            if (testPublicRearButton != null) {
+                testPublicRearButton.setEnabled(false);
+                testPublicRearButton.setAlpha(0.5f);
+                testPublicRearButton.setText("📷 Sin Trasera Pública");
+            }
+            lensOverlayBadge.setText("Sensores desactivados en checklist");
+            return;
+        }
+
+        String currentId = universalCameraController.getCurrentCameraId();
+        if (findSensorIndexById(activeViewerSensors, currentId) < 0) {
+            String targetId = resolvePreferredViewerFallbackId(activeViewerSensors);
+            switchViewerToCameraId(targetId, true);
+            currentId = targetId;
+        }
+        updateViewerLensLabels(currentId);
+    }
+
+    private static String resolvePreferredViewerFallbackId(List<DiscoveredSensor> viewerSensors) {
+        for (DiscoveredSensor sensor : viewerSensors) {
+            if (sensor.facing == 1) {
+                return sensor.id;
+            }
+        }
+        return viewerSensors.get(0).id;
+    }
+
+    private void onSwitchViewerLensClicked() {
+        cancelCountdown(false);
+        if (!activeViewerSensors.isEmpty()) {
+            if (activeViewerSensors.size() < 2) {
+                return;
+            }
+            int idx = findSensorIndexById(activeViewerSensors, universalCameraController.getCurrentCameraId());
+            DiscoveredSensor next = activeViewerSensors.get((idx + 1) % activeViewerSensors.size());
+            switchViewerToCameraId(next.id, true);
+            return;
+        }
+
+        String currentId = universalCameraController.getCurrentCameraId();
+        String nextId = CameraConfig.FRONT_CAMERA_WIDE_ID.equals(currentId)
+                ? CameraConfig.FRONT_CAMERA_NORMAL_ID
+                : CameraConfig.FRONT_CAMERA_WIDE_ID;
+        switchViewerToCameraId(nextId, true);
+    }
+
+    private void onTestPublicRearClicked() {
+        cancelCountdown(false);
+        if (!lastScannedSensors.isEmpty()) {
+            if (activePublicRearSensors.isEmpty()) {
+                Toast.makeText(this, "No hay sensores traseros públicos saludables seleccionados.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String currentId = universalCameraController.getCurrentCameraId();
+            int currentIdx = findSensorIndexById(activePublicRearSensors, currentId);
+            DiscoveredSensor target = (currentIdx >= 0 && activePublicRearSensors.size() > 1)
+                    ? activePublicRearSensors.get((currentIdx + 1) % activePublicRearSensors.size())
+                    : activePublicRearSensors.get(0);
+            switchViewerToCameraId(target.id, true);
+            return;
+        }
+        switchViewerToCameraId("0", true);
+    }
+
+    private void switchViewerToCameraId(String cameraId, boolean persistPreference) {
+        if (cameraId == null || cameraId.trim().isEmpty()) {
+            return;
+        }
+        String trimmedId = cameraId.trim();
+        cancelCountdown(false);
+        viewerPreferredCameraId = trimmedId;
+        currentCameraOpenedSuccessfully = false;
+        pendingApplySavedFlash = true;
+        pendingApplySavedAperture = true;
+
+        if (viewerPreviewView != null && viewerPreviewView.isAvailable()) {
+            universalCameraController.switchToCameraId(trimmedId, viewerPreviewView, getDisplayRotationCompat());
+        } else {
+            universalCameraController.setCurrentCameraId(trimmedId);
+        }
+        updateViewerLensLabels(trimmedId);
+        if (persistPreference) {
+            persistViewerPreferences();
+        }
+    }
+
+    private void updateViewerLensLabels(String activeId) {
+        if (switchLensButton == null || lensOverlayBadge == null) {
+            return;
+        }
+        boolean recording = universalCameraController != null && universalCameraController.isRecordingVideo();
+
+        if (!activeViewerSensors.isEmpty()) {
+            if (activeViewerSensors.size() == 1) {
+                DiscoveredSensor only = activeViewerSensors.get(0);
+                switchLensButton.setEnabled(false);
+                switchLensButton.setAlpha(0.65f);
+                switchLensButton.setText("1 lente en visor");
+                lensOverlayBadge.setText(formatSensorBadge(only));
+            } else {
+                int idx = findSensorIndexById(activeViewerSensors, activeId);
+                if (idx < 0) {
+                    idx = 0;
+                }
+                DiscoveredSensor current = activeViewerSensors.get(idx);
+                DiscoveredSensor next = activeViewerSensors.get((idx + 1) % activeViewerSensors.size());
+                switchLensButton.setEnabled(!recording);
+                switchLensButton.setAlpha(recording ? 0.5f : 1.0f);
+                String nextDir = (next.facing == 1) ? "Frontal" : "Trasera";
+                String nextMp = next.getResolutionMegaPixels();
+                switchLensButton.setText("N/D".equals(nextMp) ? (nextDir + " ID " + next.id) : (nextDir + " " + nextMp));
+                lensOverlayBadge.setText(formatSensorBadge(current));
+            }
+            if (testPublicRearButton != null) {
+                boolean hasRear = !activePublicRearSensors.isEmpty();
+                testPublicRearButton.setEnabled(hasRear && !recording);
+                testPublicRearButton.setAlpha((hasRear && !recording) ? 1.0f : 0.5f);
+                testPublicRearButton.setText(hasRear ? "📷 Probar Trasera Pública en Visor" : "📷 Sin Trasera Pública");
+            }
+            return;
+        }
+
+        switchLensButton.setEnabled(!recording);
+        switchLensButton.setAlpha(recording ? 0.5f : 1.0f);
+        if (testPublicRearButton != null) {
+            testPublicRearButton.setEnabled(!recording);
+            testPublicRearButton.setAlpha(recording ? 0.5f : 1.0f);
+            testPublicRearButton.setText("📷 Probar Trasera Pública en Visor");
+        }
+
         if (CameraConfig.FRONT_CAMERA_WIDE_ID.equals(activeId)) {
             switchLensButton.setText("Lente 8.6 MP");
             lensOverlayBadge.setText("Frontal ID 1 · 12 MP");
         } else if (CameraConfig.FRONT_CAMERA_NORMAL_ID.equals(activeId)) {
             switchLensButton.setText("Lente 12 MP");
             lensOverlayBadge.setText("Frontal ID 3 · 8.6 MP");
+        } else if (universalCameraController != null && !universalCameraController.isCurrentFrontFacing()) {
+            switchLensButton.setText("Volver a Frontal");
+            lensOverlayBadge.setText("Trasera Pública ID " + activeId);
         } else {
             switchLensButton.setText("Cambiar Lente");
             lensOverlayBadge.setText("Frontal ID " + activeId);
+        }
+    }
+
+    private static String formatSensorBadge(DiscoveredSensor sensor) {
+        String prefix = (sensor.facing == 1)
+                ? ("Frontal ID " + sensor.id)
+                : ("Trasera Pública ID " + sensor.id);
+        String mp = sensor.getResolutionMegaPixels();
+        return "N/D".equals(mp) ? prefix : (prefix + " · " + mp);
+    }
+
+    private void onFlashButtonClicked() {
+        universalCameraController.cycleFlashMode();
+        viewerFlashMode = universalCameraController.getCapabilities().activeFlashMode;
+        pendingApplySavedFlash = false;
+        persistViewerPreferences();
+    }
+
+    private void onTimerButtonClicked() {
+        if (countdownRemainingSeconds > 0) {
+            cancelCountdown(true);
+        }
+        viewerTimerSeconds = CameraViewerMath.nextTimerSeconds(viewerTimerSeconds);
+        updateTimerButtonLabel();
+        persistViewerPreferences();
+    }
+
+    private void onGridButtonClicked() {
+        viewerGridMode = viewerGridMode.next();
+        if (gridOverlayView != null) {
+            gridOverlayView.setGridMode(viewerGridMode);
+        }
+        updateGridButtonLabel();
+        persistViewerPreferences();
+    }
+
+    private void onApertureButtonClicked() {
+        universalCameraController.cycleAperture();
+        viewerPreferredAperture = universalCameraController.getCapabilities().activeAperture;
+        pendingApplySavedAperture = false;
+        persistViewerPreferences();
+    }
+
+    private void onCapturePhotoClicked() {
+        if (universalCameraController.isRecordingVideo()) {
+            return;
+        }
+        if (countdownRemainingSeconds > 0) {
+            cancelCountdown(true);
+            return;
+        }
+        if (viewerTimerSeconds <= 0) {
+            universalCameraController.capturePhoto(getDisplayRotationCompat());
+            return;
+        }
+        startPhotoCountdown(viewerTimerSeconds);
+    }
+
+    private void startPhotoCountdown(int seconds) {
+        cancelCountdown(false);
+        countdownRemainingSeconds = seconds;
+        updateCountdownUi(countdownRemainingSeconds);
+
+        countdownRunnable = new Runnable() {
+            @Override
+            public void run() {
+                countdownRemainingSeconds--;
+                if (countdownRemainingSeconds > 0) {
+                    updateCountdownUi(countdownRemainingSeconds);
+                    countdownHandler.postDelayed(this, COUNTDOWN_TICK_MS);
+                } else {
+                    countdownRunnable = null;
+                    countdownRemainingSeconds = 0;
+                    updateCountdownUi(0);
+                    universalCameraController.capturePhoto(getDisplayRotationCompat());
+                }
+            }
+        };
+        countdownHandler.postDelayed(countdownRunnable, COUNTDOWN_TICK_MS);
+    }
+
+    private void cancelCountdown(boolean notifyUser) {
+        boolean wasActive = countdownRemainingSeconds > 0 || countdownRunnable != null;
+        if (countdownRunnable != null) {
+            countdownHandler.removeCallbacks(countdownRunnable);
+            countdownRunnable = null;
+        }
+        countdownRemainingSeconds = 0;
+        updateCountdownUi(0);
+        if (wasActive && notifyUser) {
+            onStatusChanged("Temporizador cancelado.");
+        }
+    }
+
+    private void updateCountdownUi(int remainingSeconds) {
+        if (countdownOverlayText != null) {
+            if (remainingSeconds > 0) {
+                countdownOverlayText.setText(String.valueOf(remainingSeconds));
+                countdownOverlayText.setVisibility(View.VISIBLE);
+            } else {
+                countdownOverlayText.setVisibility(View.GONE);
+            }
+        }
+        if (capturePhotoButton != null && !universalCameraController.isRecordingVideo()) {
+            if (remainingSeconds > 0) {
+                capturePhotoButton.setText("✕ Cancelar " + remainingSeconds + "s");
+                capturePhotoButton.setBackground(createRoundedDrawable("#B45309", "#B45309", 13, 0));
+            } else {
+                capturePhotoButton.setText(CameraConfig.BTN_VIEWER_PHOTO_SHORT);
+                capturePhotoButton.setBackground(createRoundedDrawable("#059669", "#059669", 13, 0));
+            }
+        }
+    }
+
+    private void onRecordVideoClicked() {
+        if (universalCameraController.isRecordingVideo()) {
+            universalCameraController.stopVideoRecording();
+            return;
+        }
+        cancelCountdown(false);
+
+        boolean hasAudioPerm = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        VideoRecordingState.StartDecision decision = VideoRecordingState.decideStart(
+                hasAudioPerm,
+                audioPermissionDeniedThisSession,
+                false
+        );
+
+        switch (decision) {
+            case REQUEST_AUDIO_PERMISSION:
+                pendingVideoRecordAfterAudioPrompt = true;
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO_PERMISSION);
+                break;
+            case START_WITH_AUDIO:
+                universalCameraController.startVideoRecording(
+                        getDisplayRotationCompat(),
+                        VideoRecordingState.AudioMode.WITH_AUDIO
+                );
+                break;
+            case START_VIDEO_ONLY:
+                String msg = "Grabando MP4 sin audio (permiso de micrófono no concedido)";
+                onStatusChanged(msg);
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                universalCameraController.startVideoRecording(
+                        getDisplayRotationCompat(),
+                        VideoRecordingState.AudioMode.VIDEO_ONLY_NO_MIC_PERMISSION
+                );
+                break;
+        }
+    }
+
+    private void updateRecordingUi(boolean recording, long elapsedMs, VideoRecordingState.AudioMode audioMode) {
+        if (recordingTimerBadge != null) {
+            if (recording) {
+                String formatted = VideoRecordingState.formatElapsedDuration(elapsedMs);
+                String prefix = (audioMode == VideoRecordingState.AudioMode.WITH_AUDIO)
+                        ? "● REC "
+                        : "● REC (Sin audio) ";
+                recordingTimerBadge.setText(prefix + formatted);
+                recordingTimerBadge.setVisibility(View.VISIBLE);
+            } else {
+                recordingTimerBadge.setVisibility(View.GONE);
+            }
+        }
+        if (recordVideoButton != null) {
+            if (recording) {
+                recordVideoButton.setText(CameraConfig.BTN_VIEWER_VIDEO_STOP_SHORT);
+                recordVideoButton.setTextColor(Color.parseColor("#FFFFFF"));
+                recordVideoButton.setBackground(createRoundedDrawable("#DC2626", "#DC2626", 13, 0));
+            } else {
+                recordVideoButton.setText(CameraConfig.BTN_VIEWER_VIDEO_SHORT);
+                recordVideoButton.setTextColor(Color.parseColor("#FCA5A5"));
+                recordVideoButton.setBackground(createRoundedDrawable("#1E293B", "#1E293B", 13, 0));
+            }
+        }
+        if (capturePhotoButton != null) {
+            capturePhotoButton.setEnabled(!recording);
+            capturePhotoButton.setAlpha(recording ? 0.45f : 1.0f);
+            if (!recording && countdownRemainingSeconds == 0) {
+                capturePhotoButton.setText(CameraConfig.BTN_VIEWER_PHOTO_SHORT);
+                capturePhotoButton.setBackground(createRoundedDrawable("#059669", "#059669", 13, 0));
+            }
+        }
+        updateViewerLensLabels(universalCameraController != null
+                ? universalCameraController.getCurrentCameraId()
+                : viewerPreferredCameraId);
+    }
+
+    private void updateViewerCapabilityControls(UniversalCameraController.ViewerCapabilities caps) {
+        if (caps == null) {
+            return;
+        }
+        if (zoomPresetButton != null && zoomOutButton != null && zoomInButton != null) {
+            boolean zoomSupported = caps.zoomCaps != null
+                    && (caps.zoomCaps.maxZoom > caps.zoomCaps.minZoom + 0.001f);
+            zoomPresetButton.setText(CameraViewerMath.formatZoomLabel(caps.activeZoom));
+            zoomPresetButton.setEnabled(zoomSupported);
+            zoomPresetButton.setAlpha(zoomSupported ? 1.0f : 0.65f);
+            zoomOutButton.setEnabled(zoomSupported && caps.activeZoom > caps.zoomCaps.minZoom + 0.001f);
+            zoomInButton.setEnabled(zoomSupported && caps.activeZoom < caps.zoomCaps.maxZoom - 0.001f);
+            zoomOutButton.setAlpha(zoomOutButton.isEnabled() ? 1.0f : 0.45f);
+            zoomInButton.setAlpha(zoomInButton.isEnabled() ? 1.0f : 0.45f);
+        }
+
+        if (evValueLabel != null && evMinusButton != null && evPlusButton != null) {
+            boolean evSupported = caps.evCaps != null && caps.evCaps.supported;
+            evValueLabel.setText(CameraViewerMath.formatEvValue(caps.activeEvIndex, caps.evCaps));
+            evMinusButton.setEnabled(evSupported && caps.activeEvIndex > caps.evCaps.minIndex);
+            evPlusButton.setEnabled(evSupported && caps.activeEvIndex < caps.evCaps.maxIndex);
+            evMinusButton.setAlpha(evMinusButton.isEnabled() ? 1.0f : 0.45f);
+            evPlusButton.setAlpha(evPlusButton.isEnabled() ? 1.0f : 0.45f);
+        }
+
+        updateFlashButtonUi(caps.flashAvailable, caps.activeFlashMode);
+        updateApertureButtonUi(caps);
+
+        if (lastScannedSensors.isEmpty() && lensOverlayBadge != null) {
+            String dirLabel = caps.isFrontFacing ? "Frontal" : "Trasera Pública";
+            String mpLabel = (caps.jpegWidth > 0 && caps.jpegHeight > 0)
+                    ? String.format(java.util.Locale.US, " · %.1f MP", ((double) caps.jpegWidth * caps.jpegHeight) / 1_000_000.0)
+                    : "";
+            lensOverlayBadge.setText(dirLabel + " ID " + caps.cameraId + mpLabel);
+        }
+    }
+
+    private void updateFlashButtonUi(boolean flashAvailable, CameraViewerMath.FlashMode mode) {
+        if (flashButton == null) {
+            return;
+        }
+        CameraViewerMath.FlashMode safeMode = (mode != null) ? mode : CameraViewerMath.FlashMode.OFF;
+        flashButton.setText(formatFlashButtonLabel(safeMode));
+        flashButton.setEnabled(flashAvailable);
+        flashButton.setAlpha(flashAvailable ? 1.0f : 0.45f);
+    }
+
+    private static String formatFlashButtonLabel(CameraViewerMath.FlashMode mode) {
+        if (mode == null) {
+            return "⚡ Off";
+        }
+        switch (mode) {
+            case AUTO:
+                return "⚡ Auto";
+            case ON:
+                return "⚡ On";
+            case TORCH:
+                return "⚡ Linterna";
+            case OFF:
+            default:
+                return "⚡ Off";
+        }
+    }
+
+    private void updateTimerButtonLabel() {
+        if (timerButton != null) {
+            timerButton.setText(viewerTimerSeconds == 0 ? "⏱ Off" : ("⏱ " + viewerTimerSeconds + "s"));
+        }
+    }
+
+    private void updateGridButtonLabel() {
+        if (gridButton != null) {
+            CameraViewerMath.GridMode mode = (viewerGridMode != null) ? viewerGridMode : CameraViewerMath.GridMode.OFF;
+            gridButton.setText("⊞ " + mode.displayLabel);
+        }
+    }
+
+    private void updateApertureButtonUi(UniversalCameraController.ViewerCapabilities caps) {
+        if (apertureButton == null) {
+            return;
+        }
+        boolean supportedBySensor = caps != null
+                && caps.apertureCaps != null
+                && caps.apertureCaps.variableApertureSupported;
+        if (supportedBySensor) {
+            apertureButton.setVisibility(View.VISIBLE);
+            apertureButton.setEnabled(true);
+            apertureButton.setAlpha(1.0f);
+            apertureButton.setText("◉ " + CameraViewerMath.formatApertureLabel(caps.activeAperture, caps.apertureCaps));
+        } else if (modelProfile != null && modelProfile.hasVariableAperture) {
+            apertureButton.setVisibility(View.VISIBLE);
+            apertureButton.setEnabled(false);
+            apertureButton.setAlpha(0.5f);
+            apertureButton.setText("f/1.5↔2.4 (Trasera)");
+        } else {
+            apertureButton.setVisibility(View.GONE);
+        }
+    }
+
+    private void applyViewerPreferencesSnapshot(
+            DiagnosticProfileCodec.ViewerPreferencesSnapshot snapshot,
+            boolean resetPendingFlags
+    ) {
+        DiagnosticProfileCodec.ViewerPreferencesSnapshot safe =
+                (snapshot != null) ? snapshot : DiagnosticProfileCodec.ViewerPreferencesSnapshot.defaults();
+        viewerPreferredCameraId = safe.preferredCameraId;
+        viewerGridMode = safe.gridMode;
+        viewerTimerSeconds = safe.timerSeconds;
+        viewerFlashMode = safe.flashMode;
+        viewerPreferredAperture = safe.preferredAperture;
+        if (resetPendingFlags) {
+            pendingApplySavedFlash = true;
+            pendingApplySavedAperture = true;
+        }
+    }
+
+    private DiagnosticProfileCodec.ViewerPreferencesSnapshot buildCurrentViewerPreferencesSnapshot() {
+        String activeId = (viewerPreferredCameraId != null && !viewerPreferredCameraId.trim().isEmpty())
+                ? viewerPreferredCameraId
+                : CameraConfig.FRONT_CAMERA_WIDE_ID;
+        return new DiagnosticProfileCodec.ViewerPreferencesSnapshot(
+                activeId,
+                viewerGridMode,
+                viewerTimerSeconds,
+                viewerFlashMode,
+                viewerPreferredAperture
+        );
+    }
+
+    private void persistViewerPreferences() {
+        RescuePreferences.saveViewerPreferences(this, buildCurrentViewerPreferencesSnapshot());
+    }
+
+    private void launchSafExportProfile() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            intent.putExtra(
+                    Intent.EXTRA_TITLE,
+                    DiagnosticProfileCodec.buildSuggestedFileName(Build.MODEL, System.currentTimeMillis())
+            );
+            startActivityForResult(intent, REQUEST_EXPORT_PROFILE);
+        } catch (RuntimeException e) {
+            onError("No se pudo abrir el selector SAF para exportar: " + e.getMessage());
+        }
+    }
+
+    private void launchSafImportProfile() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/plain"});
+            startActivityForResult(intent, REQUEST_IMPORT_PROFILE);
+        } catch (RuntimeException e) {
+            onError("No se pudo abrir el selector SAF para importar: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+        Uri uri = data.getData();
+        if (requestCode == REQUEST_EXPORT_PROFILE) {
+            handleExportProfileUri(uri);
+        } else if (requestCode == REQUEST_IMPORT_PROFILE) {
+            handleImportProfileUri(uri);
+        }
+    }
+
+    private void handleExportProfileUri(Uri uri) {
+        try {
+            DiagnosticProfileCodec.DiagnosticProfile profile = new DiagnosticProfileCodec.DiagnosticProfile(
+                    CameraConfig.PROFILE_SCHEMA_VERSION,
+                    CameraConfig.APP_VERSION,
+                    System.currentTimeMillis(),
+                    Build.MODEL,
+                    modelProfile.marketingName,
+                    oneUiGeneration,
+                    selectedSensorIds,
+                    RescuePreferences.loadQuickTileAction(this),
+                    RescuePreferences.loadQuickTileLabel(this),
+                    completedAssistantStepIds,
+                    buildCurrentViewerPreferencesSnapshot(),
+                    lastScannedSensors
+            );
+            String json = DiagnosticProfileCodec.encode(profile);
+            try (OutputStream os = getContentResolver().openOutputStream(uri, "wt")) {
+                if (os == null) {
+                    throw new IOException("No se pudo abrir el flujo de escritura SAF.");
+                }
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+                os.flush();
+            }
+            if (profileStatusText != null) {
+                profileStatusText.setText("✓ Perfil .json exportado (" + lastScannedSensors.size() + " sensores).");
+                profileStatusText.setTextColor(Color.parseColor("#34D399"));
+            }
+            onStatusChanged("Perfil .json exportado");
+            Toast.makeText(this, "Perfil .json exportado", Toast.LENGTH_SHORT).show();
+        } catch (IOException | RuntimeException e) {
+            onError("Error exportando perfil .json: " + e.getMessage());
+        }
+    }
+
+    private void handleImportProfileUri(Uri uri) {
+        try {
+            String json = readUtf8BoundedFromUri(uri, DiagnosticProfileCodec.MAX_JSON_BYTES);
+            DiagnosticProfileCodec.DiagnosticProfile profile = DiagnosticProfileCodec.decode(json);
+
+            lastScannedSensors = new ArrayList<>(profile.discoveredSensors);
+            if (!lastScannedSensors.isEmpty()) {
+                selectedSensorIds = SensorSelectionState.sanitizeSelection(profile.selectedSensorIds, lastScannedSensors);
+            } else {
+                selectedSensorIds = new LinkedHashSet<>(profile.selectedSensorIds);
+            }
+            RescuePreferences.saveSelectedSensorIds(this, selectedSensorIds);
+
+            RescuePreferences.saveQuickTileAction(this, profile.quickTileAction, profile.quickTileLabel);
+
+            completedAssistantStepIds = OneUiAssistantGuide.sanitizeCompletedStepIds(
+                    profile.completedAssistantStepIds,
+                    assistantSteps
+            );
+            RescuePreferences.saveAssistantCompletedSteps(this, completedAssistantStepIds);
+            refreshAssistantStepsUi();
+
+            applyViewerPreferencesSnapshot(profile.viewerPreferences, true);
+            RescuePreferences.saveViewerPreferences(this, profile.viewerPreferences);
+            if (gridOverlayView != null) {
+                gridOverlayView.setGridMode(viewerGridMode);
+            }
+            updateTimerButtonLabel();
+            updateGridButtonLabel();
+            updateFlashButtonUi(false, viewerFlashMode);
+            updateApertureButtonUi(null);
+            switchViewerToCameraId(viewerPreferredCameraId, false);
+
+            if (scanStatusText != null && !lastScannedSensors.isEmpty()) {
+                scanStatusText.setText("Perfil cargado: " + lastScannedSensors.size() + " sensores importados.");
+                scanStatusText.setTextColor(Color.parseColor("#38BDF8"));
+            }
+            renderScanChecklist();
+            rebuildDynamicUiAndShortcuts();
+
+            if (!DiagnosticProfileCodec.isCompatibleModel(profile.deviceModel, Build.MODEL)) {
+                String warn = "Perfil importado de otro modelo (" + profile.deviceModel + "): sensores adaptados.";
+                if (profileStatusText != null) {
+                    profileStatusText.setText("▲ " + warn);
+                    profileStatusText.setTextColor(Color.parseColor("#FBBF24"));
+                }
+                if (statusBanner != null) {
+                    statusBanner.setTextColor(Color.parseColor("#FBBF24"));
+                    statusBanner.setText("▲ " + warn);
+                }
+                Toast.makeText(this, warn, Toast.LENGTH_LONG).show();
+            } else {
+                String ok = "Perfil .json importado (" + lastScannedSensors.size() + " sensores).";
+                if (profileStatusText != null) {
+                    profileStatusText.setText("✓ " + ok);
+                    profileStatusText.setTextColor(Color.parseColor("#34D399"));
+                }
+                onStatusChanged(ok);
+                Toast.makeText(this, ok, Toast.LENGTH_SHORT).show();
+            }
+        } catch (DiagnosticProfileCodec.ValidationException e) {
+            onError("Perfil .json inválido: " + e.getMessage());
+        } catch (IOException | RuntimeException e) {
+            onError("Error importando perfil .json: " + e.getMessage());
+        }
+    }
+
+    private String readUtf8BoundedFromUri(Uri uri, int maxBytes) throws IOException {
+        try (InputStream is = getContentResolver().openInputStream(uri)) {
+            if (is == null) {
+                throw new IOException("No se pudo abrir el archivo .json seleccionado.");
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int totalBytes = 0;
+            int read;
+            while ((read = is.read(buffer)) != -1) {
+                totalBytes += read;
+                if (totalBytes > maxBytes) {
+                    throw new IOException("Archivo demasiado grande (máx 256 KB).");
+                }
+                baos.write(buffer, 0, read);
+            }
+            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
         }
     }
 
@@ -1109,6 +2010,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         for (RescueActionSpec spec : specs) {
             options.add(new QuickTileOption(spec.intentAction, resolveShortcutLabel(spec)));
         }
+        options.add(new QuickTileOption(CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER, "Visor Universal"));
         options.add(new QuickTileOption(CameraConfig.ACTION_QUICK_RECOVERY, "Recuperación"));
         return options;
     }
@@ -1153,6 +2055,26 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             }
         }
         return -1;
+    }
+
+    private boolean isKnownFrontCameraId(String cameraId) {
+        if (cameraId == null) {
+            return false;
+        }
+        if (CameraConfig.FRONT_CAMERA_WIDE_ID.equals(cameraId)
+                || CameraConfig.FRONT_CAMERA_NORMAL_ID.equals(cameraId)) {
+            return true;
+        }
+        if (modelProfile != null
+                && (cameraId.equals(modelProfile.frontWideId) || cameraId.equals(modelProfile.frontNormalId))) {
+            return true;
+        }
+        for (DiscoveredSensor sensor : lastScannedSensors) {
+            if (cameraId.equals(sensor.id) && sensor.facing == 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String resolveShortcutLabel(RescueActionSpec spec) {
@@ -1211,14 +2133,26 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     }
 
     private Button createShortButton(String text, String bgHex, String fgHex, boolean bold) {
+        return createCompactButton(text, bgHex, bgHex, fgHex, 14, bold);
+    }
+
+    private Button createCompactButton(
+            String text,
+            String bgHex,
+            String strokeHex,
+            String fgHex,
+            int textSp,
+            boolean bold
+    ) {
         Button button = new Button(this);
         button.setAllCaps(false);
         button.setText(text);
         button.setTextColor(Color.parseColor(fgHex));
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp);
         button.setTypeface(Typeface.create("sans-serif-medium", bold ? Typeface.BOLD : Typeface.NORMAL));
-        button.setBackground(createRoundedDrawable(bgHex, bgHex, 13, 0));
-        button.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
+        int strokeDp = bgHex.equals(strokeHex) ? 0 : 1;
+        button.setBackground(createRoundedDrawable(bgHex, strokeHex, 12, strokeDp));
+        button.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
         return button;
     }
 
@@ -1274,7 +2208,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     }
 
     private void launchRearModeViaMap(ShootingModeMap.ModeKind kind) {
-        frontCameraController.closeCameraOnly();
+        cancelCountdown(false);
+        universalCameraController.closeCameraOnly();
+        updateRecordingUi(false, 0L, null);
         ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(modelProfile, oneUiGeneration, kind);
         lastLaunchedRearMode = kind;
         lastRearLaunchTimestampMs = System.currentTimeMillis();
@@ -1302,7 +2238,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             return;
         }
 
-        frontCameraController.closeCameraOnly();
+        cancelCountdown(false);
+        universalCameraController.closeCameraOnly();
+        updateRecordingUi(false, 0L, null);
         service.showHud();
 
         ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(
@@ -1328,7 +2266,9 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 modelProfile, oneUiGeneration, lastLaunchedRearMode, recoveryAttemptIndex);
 
         if (plan.shouldResetLocalSession) {
-            frontCameraController.stop();
+            cancelCountdown(false);
+            universalCameraController.stop();
+            updateRecordingUi(false, 0L, null);
             RearCaptureService service = RearCaptureService.getInstance();
             if (service != null) {
                 service.hideHud();
@@ -1446,7 +2386,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             }
         }
         if (pendingRecoveryRunnable == null) {
-            ensureCameraPermissionAndStartFrontPreview();
+            ensureCameraPermissionAndStartViewerPreview();
         }
         if (lockupDetected && statusBanner != null) {
             statusBanner.setTextColor(Color.parseColor("#F59E0B"));
@@ -1455,22 +2395,26 @@ public final class MainActivity extends Activity implements FrontCameraControlle
 
     @Override
     protected void onPause() {
-        frontCameraController.stop();
+        cancelCountdown(false);
+        universalCameraController.stop();
+        updateRecordingUi(false, 0L, null);
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
         recoveryHandler.removeCallbacksAndMessages(null);
+        countdownHandler.removeCallbacksAndMessages(null);
         pendingRecoveryRunnable = null;
+        countdownRunnable = null;
         super.onDestroy();
     }
 
-    private void ensureCameraPermissionAndStartFrontPreview() {
+    private void ensureCameraPermissionAndStartViewerPreview() {
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
         } else {
-            frontCameraController.start(frontPreviewView, getDisplayRotationCompat());
+            universalCameraController.start(viewerPreviewView, getDisplayRotationCompat());
         }
     }
 
@@ -1479,10 +2423,25 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                frontCameraController.start(frontPreviewView, getDisplayRotationCompat());
+                universalCameraController.start(viewerPreviewView, getDisplayRotationCompat());
             } else {
-                onError("Permiso de cámara requerido para probar sensores y visor frontal.");
+                onError("Permiso de cámara requerido para probar sensores y visor Camera2.");
             }
+        } else if (requestCode == REQUEST_AUDIO_PERMISSION) {
+            if (!pendingVideoRecordAfterAudioPrompt) {
+                return;
+            }
+            pendingVideoRecordAfterAudioPrompt = false;
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            VideoRecordingState.AudioMode mode =
+                    VideoRecordingState.resolveAudioModeAfterPermissionResult(granted, false);
+            if (!granted) {
+                audioPermissionDeniedThisSession = true;
+                String msg = "Sin micrófono: grabando video MP4 sin audio";
+                onStatusChanged(msg);
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            }
+            universalCameraController.startVideoRecording(getDisplayRotationCompat(), mode);
         }
     }
 
@@ -1502,6 +2461,34 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     }
 
     @Override
+    public void onCapabilitiesChanged(UniversalCameraController.ViewerCapabilities capabilities) {
+        if (capabilities == null) {
+            return;
+        }
+        currentCameraOpenedSuccessfully = true;
+
+        if (pendingApplySavedFlash) {
+            pendingApplySavedFlash = false;
+            if (capabilities.flashAvailable && viewerFlashMode != capabilities.activeFlashMode) {
+                universalCameraController.setFlashMode(viewerFlashMode);
+                return;
+            }
+        }
+        if (pendingApplySavedAperture) {
+            pendingApplySavedAperture = false;
+            if (capabilities.apertureCaps != null
+                    && capabilities.apertureCaps.variableApertureSupported
+                    && viewerPreferredAperture > 0.0f
+                    && Math.abs(capabilities.activeAperture - viewerPreferredAperture) > 0.05f) {
+                universalCameraController.setAperture(viewerPreferredAperture);
+                return;
+            }
+        }
+
+        updateViewerCapabilityControls(capabilities);
+    }
+
+    @Override
     public void onPhotoSaved(MediaStoreSaver.SaveResult result) {
         String msg = "✓ Guardada en Galería: " + result.fileName;
         if (statusBanner != null) {
@@ -1512,7 +2499,62 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     }
 
     @Override
+    public void onVideoRecordingStarted(VideoRecordingState.AudioMode audioMode) {
+        updateRecordingUi(true, 0L, audioMode);
+        updateViewerCapabilityControls(universalCameraController.getCapabilities());
+    }
+
+    @Override
+    public void onVideoRecordingTick(long elapsedMs, VideoRecordingState.AudioMode audioMode) {
+        updateRecordingUi(true, elapsedMs, audioMode);
+    }
+
+    @Override
+    public void onVideoSaved(
+            MediaStoreSaver.SaveResult result,
+            long durationMs,
+            VideoRecordingState.AudioMode audioMode
+    ) {
+        updateRecordingUi(false, 0L, audioMode);
+        String duration = VideoRecordingState.formatElapsedDuration(durationMs);
+        String suffix = (audioMode == VideoRecordingState.AudioMode.WITH_AUDIO) ? "" : " (sin audio)";
+        String msg = "✓ Video MP4 guardado (" + duration + suffix + "): " + result.fileName;
+        if (statusBanner != null) {
+            statusBanner.setTextColor(Color.parseColor("#38BDF8"));
+            statusBanner.setText(msg);
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onVideoRecordingAborted(String reason) {
+        updateRecordingUi(false, 0L, null);
+        if (statusBanner != null) {
+            statusBanner.setTextColor(Color.parseColor("#FBBF24"));
+            statusBanner.setText("▲ " + reason);
+        }
+        Toast.makeText(this, reason, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
     public void onError(String error) {
+        String activeId = (universalCameraController != null)
+                ? universalCameraController.getCurrentCameraId()
+                : CameraConfig.FRONT_CAMERA_WIDE_ID;
+        if (!currentCameraOpenedSuccessfully
+                && !isKnownFrontCameraId(activeId)
+                && !CameraConfig.FRONT_CAMERA_WIDE_ID.equals(activeId)) {
+            String fallbackMsg = "Sensor ID " + activeId + " no disponible en visor; volviendo a Frontal ID "
+                    + CameraConfig.FRONT_CAMERA_WIDE_ID + ".";
+            switchViewerToCameraId(CameraConfig.FRONT_CAMERA_WIDE_ID, true);
+            if (statusBanner != null) {
+                statusBanner.setTextColor(Color.parseColor("#FBBF24"));
+                statusBanner.setText("▲ " + fallbackMsg);
+            }
+            Toast.makeText(this, fallbackMsg, Toast.LENGTH_LONG).show();
+            return;
+        }
+
         if (statusBanner != null) {
             statusBanner.setTextColor(Color.parseColor("#FCA5A5"));
             statusBanner.setText("▲ " + error);

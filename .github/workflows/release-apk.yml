@@ -26,7 +26,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Run Unit Tests (7 Pure Java Suites)
+      - name: Run Unit Tests (10 Pure Java Suites)
         run: |
           mkdir -p build/test-classes
           javac -encoding UTF-8 -d build/test-classes \
@@ -40,13 +40,19 @@ jobs:
             app/src/main/java/com/s23plus/camera/RescueActionSpec.java \
             app/src/main/java/com/s23plus/camera/SensorSelectionState.java \
             app/src/main/java/com/s23plus/camera/DynamicUiBuilder.java \
+            app/src/main/java/com/s23plus/camera/CameraViewerMath.java \
+            app/src/main/java/com/s23plus/camera/VideoRecordingState.java \
+            app/src/main/java/com/s23plus/camera/DiagnosticProfileCodec.java \
             app/src/test/java/com/s23plus/camera/CameraConfigTest.java \
             app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java \
             app/src/test/java/com/s23plus/camera/ShootingModeMapTest.java \
             app/src/test/java/com/s23plus/camera/OneUiAssistantGuideTest.java \
             app/src/test/java/com/s23plus/camera/CameraRecoveryEngineTest.java \
             app/src/test/java/com/s23plus/camera/SensorSelectionStateTest.java \
-            app/src/test/java/com/s23plus/camera/DynamicUiBuilderTest.java
+            app/src/test/java/com/s23plus/camera/DynamicUiBuilderTest.java \
+            app/src/test/java/com/s23plus/camera/CameraViewerMathTest.java \
+            app/src/test/java/com/s23plus/camera/VideoRecordingStateTest.java \
+            app/src/test/java/com/s23plus/camera/DiagnosticProfileCodecTest.java
           java -cp build/test-classes com.s23plus.camera.CameraConfigTest
           java -cp build/test-classes com.s23plus.camera.SamsungModelDatabaseTest
           java -cp build/test-classes com.s23plus.camera.ShootingModeMapTest
@@ -54,6 +60,9 @@ jobs:
           java -cp build/test-classes com.s23plus.camera.CameraRecoveryEngineTest
           java -cp build/test-classes com.s23plus.camera.SensorSelectionStateTest
           java -cp build/test-classes com.s23plus.camera.DynamicUiBuilderTest
+          java -cp build/test-classes com.s23plus.camera.CameraViewerMathTest
+          java -cp build/test-classes com.s23plus.camera.VideoRecordingStateTest
+          java -cp build/test-classes com.s23plus.camera.DiagnosticProfileCodecTest
 
       - name: Build and Sign Release APK
         run: |
@@ -70,8 +79,8 @@ jobs:
             --manifest app/src/main/AndroidManifest.xml \
             --min-sdk-version 30 \
             --target-sdk-version 34 \
-            --version-code 5 \
-            --version-name "1.4.0" \
+            --version-code 6 \
+            --version-name "2.0.0" \
             -o build/apk-ci/unaligned.apk \
             --java build/apk-ci/gen \
             build/apk-ci/compiled_res/res.zip

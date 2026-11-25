@@ -5,6 +5,7 @@ app/build/
 local.properties
 *.iml
 *.idsig
+*.aab
 .idea/
 .DS_Store
 Thumbs.db
@@ -12,12 +13,11 @@ Thumbs.db
 # Claves privadas de firma (nunca subir al repositorio)
 *.jks
 *.keystore
-!debug.keystore
+*.p12
+*.pk8
+*.pem
+keystore.properties
+signing.properties
 
 # Scratch e infraestructura de ejecución
 .superpowers/
-
-# Documentos confidenciales de negocio y monetización (Play Store)
-MONETIZATION_PLAN.md
-*monetization*
-*monetizacion*

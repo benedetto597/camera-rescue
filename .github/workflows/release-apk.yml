@@ -1,6 +1,6 @@
 name: Release APK (On Version Tag Only)
 
-# COSTO $0: Este workflow UNICAMENTE se ejecuta cuando se publica un tag de version (ej. v1.0.1).
+# COSTO $0: Este workflow UNICAMENTE se ejecuta cuando se publica un tag de version (ej. v2.1.0).
 # Los commits diarios a main o ramas de desarrollo NO consumen minutos de GitHub Actions.
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build & Publish Camera Rescue APK
+    name: Build & Publish Rescue Cam APK
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -26,7 +26,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Run Unit Tests (10 Pure Java Suites)
+      - name: Run Unit Tests (11 Pure Java Suites)
         run: |
           mkdir -p build/test-classes
           javac -encoding UTF-8 -d build/test-classes \
@@ -43,6 +43,7 @@ jobs:
             app/src/main/java/com/s23plus/camera/CameraViewerMath.java \
             app/src/main/java/com/s23plus/camera/VideoRecordingState.java \
             app/src/main/java/com/s23plus/camera/DiagnosticProfileCodec.java \
+            app/src/main/java/com/s23plus/camera/PlayStoreCompliancePolicy.java \
             app/src/test/java/com/s23plus/camera/CameraConfigTest.java \
             app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java \
             app/src/test/java/com/s23plus/camera/ShootingModeMapTest.java \
@@ -52,7 +53,8 @@ jobs:
             app/src/test/java/com/s23plus/camera/DynamicUiBuilderTest.java \
             app/src/test/java/com/s23plus/camera/CameraViewerMathTest.java \
             app/src/test/java/com/s23plus/camera/VideoRecordingStateTest.java \
-            app/src/test/java/com/s23plus/camera/DiagnosticProfileCodecTest.java
+            app/src/test/java/com/s23plus/camera/DiagnosticProfileCodecTest.java \
+            app/src/test/java/com/s23plus/camera/PlayStoreCompliancePolicyTest.java
           java -cp build/test-classes com.s23plus.camera.CameraConfigTest
           java -cp build/test-classes com.s23plus.camera.SamsungModelDatabaseTest
           java -cp build/test-classes com.s23plus.camera.ShootingModeMapTest
@@ -63,24 +65,35 @@ jobs:
           java -cp build/test-classes com.s23plus.camera.CameraViewerMathTest
           java -cp build/test-classes com.s23plus.camera.VideoRecordingStateTest
           java -cp build/test-classes com.s23plus.camera.DiagnosticProfileCodecTest
+          java -cp build/test-classes com.s23plus.camera.PlayStoreCompliancePolicyTest
 
-      - name: Build and Sign Release APK
+      - name: Build, Sign and Verify Release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" || true
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          ANDROID_JAR="$ANDROID_HOME/platforms/android-34/android.jar"
+          set -euo pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          ANDROID_JAR="$ANDROID_HOME/platforms/android-36/android.jar"
 
           mkdir -p build/apk-ci/compiled_res build/apk-ci/gen build/apk-ci/classes build/apk-ci/dex dist
+
+          sed 's|<manifest |<manifest package="com.s23plus.camera" |' app/src/main/AndroidManifest.xml > build/apk-ci/AndroidManifest.xml
 
           "$BUILD_TOOLS/aapt2" compile --dir app/src/main/res -o build/apk-ci/compiled_res/res.zip
           "$BUILD_TOOLS/aapt2" link \
             -I "$ANDROID_JAR" \
-            --manifest app/src/main/AndroidManifest.xml \
+            --manifest build/apk-ci/AndroidManifest.xml \
+            --rename-manifest-package io.github.benedetto597.rescuecam \
+            --custom-package com.s23plus.camera \
             --min-sdk-version 30 \
-            --target-sdk-version 34 \
-            --version-code 6 \
-            --version-name "2.0.0" \
+            --target-sdk-version 36 \
+            --version-code 7 \
+            --version-name "2.1.0" \
             -o build/apk-ci/unaligned.apk \
             --java build/apk-ci/gen \
             build/apk-ci/compiled_res/res.zip
@@ -95,23 +108,56 @@ jobs:
           (cd build/apk-ci/dex && zip -u ../unsigned.apk classes.dex)
           "$BUILD_TOOLS/zipalign" -f -p 4 build/apk-ci/unsigned.apk build/apk-ci/aligned.apk
 
-          keytool -genkeypair -v \
-            -keystore build/apk-ci/release.keystore \
-            -storepass android -alias camerarescue -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=CameraRescue,O=CameraRescue,C=US"
-
+          KEYSTORE_FILE="${RUNNER_TEMP}/release.keystore"
           VERSION_TAG="${GITHUB_REF_NAME}"
           FINAL_APK="dist/camera-rescue-${VERSION_TAG}.apk"
 
-          "$BUILD_TOOLS/apksigner" sign \
-            --ks build/apk-ci/release.keystore \
-            --ks-pass pass:android \
-            --key-pass pass:android \
-            --out "$FINAL_APK" \
-            build/apk-ci/aligned.apk
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && [ -n "${ANDROID_KEY_ALIAS:-}" ] && [ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+            echo "[RELEASE-SIGN] Decoding release keystore from GitHub Secrets into RUNNER_TEMP"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+            chmod 600 "$KEYSTORE_FILE"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$KEYSTORE_FILE" \
+              --ks-pass "pass:${ANDROID_KEYSTORE_PASSWORD}" \
+              --ks-key-alias "${ANDROID_KEY_ALIAS}" \
+              --key-pass "pass:${ANDROID_KEY_PASSWORD}" \
+              --out "$FINAL_APK" \
+              build/apk-ci/aligned.apk
+          else
+            echo "[CI-EPHEMERAL-SIGN] Generating ephemeral CI keystore in RUNNER_TEMP"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_FILE" \
+              -storepass android -alias camerarescue -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=RescueCam,O=RescueCam,C=US"
+            chmod 600 "$KEYSTORE_FILE"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$KEYSTORE_FILE" \
+              --ks-pass pass:android \
+              --ks-key-alias camerarescue \
+              --key-pass pass:android \
+              --out "$FINAL_APK" \
+              build/apk-ci/aligned.apk
+          fi
+
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$FINAL_APK"
+
+          BADGING="$("$BUILD_TOOLS/aapt2" dump badging "$FINAL_APK")"
+          echo "$BADGING" | grep -qF "name='io.github.benedetto597.rescuecam'"
+          echo "$BADGING" | grep -qF "versionCode='7'"
+          echo "$BADGING" | grep -qF "versionName='2.1.0'"
+          echo "$BADGING" | grep -qF "targetSdkVersion:'36'"
+          echo "$BADGING" | grep -qF "application-label:'Rescue Cam: Sensor Recovery'"
+          if echo "$BADGING" | grep -qE "android\.permission\.INTERNET|BIND_ACCESSIBILITY_SERVICE"; then
+            echo "ERROR: Forbidden permission found in APK badging!" >&2
+            exit 1
+          fi
 
           sha256sum "$FINAL_APK" > "${FINAL_APK}.sha256"
+
+      - name: Clean up temporary keystores
+        if: always()
+        run: rm -f "${RUNNER_TEMP}"/*.keystore
 
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2

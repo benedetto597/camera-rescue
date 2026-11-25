@@ -469,7 +469,7 @@ public final class UniversalCameraController {
                                     notifyCapabilitiesChanged();
                                     notifyStatus("Grabando MP4 en ID " + currentCameraId + "...");
                                 } catch (CameraAccessException | RuntimeException e) {
-                                    abortActivePrepare("Error iniciando grabacion MP4: " + e.getMessage());
+                                    abortActivePrepare("Error iniciando grabacion MP4: " + e.getMessage(), true);
                                 }
                             }
                         }
@@ -477,13 +477,13 @@ public final class UniversalCameraController {
                         @Override
                         public void onConfigureFailed(CameraCaptureSession session) {
                             synchronized (UniversalCameraController.this) {
-                                abortActivePrepare("Fallo al configurar sesion de video Camera2.");
+                                abortActivePrepare("Fallo al configurar sesion de video Camera2.", true);
                             }
                         }
                     }
             );
         } catch (IOException | CameraAccessException | RuntimeException e) {
-            abortActivePrepare("No se pudo preparar grabacion MP4: " + e.getMessage());
+            abortActivePrepare("No se pudo preparar grabacion MP4: " + e.getMessage(), true);
         }
     }
 
@@ -569,30 +569,34 @@ public final class UniversalCameraController {
 
                 @Override
                 public void onDisconnected(CameraDevice camera) {
-                    synchronized (UniversalCameraController.this) {
-                        isOpening = false;
-                        camera.close();
-                        if (cameraDevice == camera) {
-                            cameraDevice = null;
-                        }
-                    }
+                    handleCameraDeviceLoss(camera, generation);
                 }
 
                 @Override
                 public void onError(CameraDevice camera, int error) {
-                    synchronized (UniversalCameraController.this) {
-                        isOpening = false;
-                        camera.close();
-                        if (cameraDevice == camera) {
-                            cameraDevice = null;
-                        }
-                    }
+                    handleCameraDeviceLoss(camera, generation);
                     notifyError("Error al abrir camara ID " + currentCameraId + " (codigo " + error + ")");
                 }
             }, backgroundHandler);
         } catch (CameraAccessException | RuntimeException e) {
             isOpening = false;
             notifyError("No se pudo inicializar camara ID " + currentCameraId + ": " + e.getMessage());
+        }
+    }
+
+    private synchronized void handleCameraDeviceLoss(CameraDevice camera, int generation) {
+        isOpening = false;
+        if (cameraDevice == camera || generation == openGeneration) {
+            openGeneration++;
+            cameraDevice = null;
+            if (videoState.isRecordingOrBusy()) {
+                stopVideoRecordingInternal(false);
+            }
+            closeCaptureSessionOnly();
+        }
+        try {
+            camera.close();
+        } catch (Exception ignored) {
         }
     }
 
@@ -699,7 +703,9 @@ public final class UniversalCameraController {
                         @Override
                         public void onConfigured(CameraCaptureSession session) {
                             synchronized (UniversalCameraController.this) {
-                                if (cameraDevice == null || generation != openGeneration) {
+                                if (cameraDevice == null
+                                        || generation != openGeneration
+                                        || videoState.isRecordingOrBusy()) {
                                     try {
                                         session.close();
                                     } catch (Exception ignored) {
@@ -720,6 +726,13 @@ public final class UniversalCameraController {
 
                         @Override
                         public void onConfigureFailed(CameraCaptureSession session) {
+                            synchronized (UniversalCameraController.this) {
+                                if (cameraDevice == null
+                                        || generation != openGeneration
+                                        || videoState.isRecordingOrBusy()) {
+                                    return;
+                                }
+                            }
                             notifyError("Fallo al configurar sesion Camera2 en ID " + currentCameraId);
                         }
                     }
@@ -829,10 +842,7 @@ public final class UniversalCameraController {
         stopRecordingTicker();
 
         if (currentState == VideoRecordingState.State.PREPARING) {
-            abortActivePrepare("Grabacion cancelada antes de iniciar.");
-            if (restorePreview && cameraDevice != null && previewSurface != null && imageReader != null) {
-                createPreviewSession();
-            }
+            abortActivePrepare("Grabacion cancelada antes de iniciar.", restorePreview);
             return;
         }
 
@@ -898,7 +908,7 @@ public final class UniversalCameraController {
         }
     }
 
-    private void abortActivePrepare(String reason) {
+    private void abortActivePrepare(String reason, boolean restorePreview) {
         stopRecordingTicker();
         closeCaptureSessionOnly();
         releaseMediaRecorderQuietly();
@@ -906,7 +916,7 @@ public final class UniversalCameraController {
         pendingVideoSession = null;
         videoState.resetToIdle();
         notifyVideoRecordingAborted(reason);
-        if (cameraDevice != null && previewSurface != null && imageReader != null) {
+        if (restorePreview && cameraDevice != null && previewSurface != null && imageReader != null) {
             createPreviewSession();
         }
     }

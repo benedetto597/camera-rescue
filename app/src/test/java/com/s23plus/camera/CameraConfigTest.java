@@ -10,16 +10,17 @@ public final class CameraConfigTest {
         testCameraIdsAndConstants();
         testAppBrandingAndShortLabels();
         testV130ActionConstants();
+        testV140HeuristicAndRecoveryConstants();
         testToggleFrontCameraId();
         testCleanCropBoundsOnS23PlusResolution();
         testFullFrameCropBounds();
         testInvalidDimensionsThrowException();
-        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (7/7).");
+        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (8/8).");
     }
 
     private static void testAppBrandingAndShortLabels() {
         assertEquals("Samsung Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
-        assertEquals("1.3.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.3.0");
+        assertEquals("1.4.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.4.0");
         assertTrue(CameraConfig.BTN_REAR_PRO_SHORT.length() <= 24, "Nombre corto de boton Pro debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_QR_SHORT.length() <= 26, "Nombre corto de boton QR debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_VIDEO_SHORT.length() <= 24, "Nombre corto de boton Video debe ser conciso");
@@ -44,6 +45,26 @@ public final class CameraConfigTest {
                 "EXTRA_SHORTCUT_SENSOR_ID incorrecto");
         assertEquals(4, CameraConfig.MAX_DYNAMIC_SHORTCUTS,
                 "MAX_DYNAMIC_SHORTCUTS debe ser 4");
+    }
+
+    private static void testV140HeuristicAndRecoveryConstants() {
+        assertEquals("com.s23plus.camera.action.QUICK_RECOVERY", CameraConfig.ACTION_QUICK_RECOVERY,
+                "ACTION_QUICK_RECOVERY incorrecta");
+        assertEquals("com.sec.android.app.camera.setting.CameraSettingActivity",
+                CameraConfig.SAMSUNG_CAMERA_SETTINGS_ACTIVITY,
+                "SAMSUNG_CAMERA_SETTINGS_ACTIVITY incorrecta");
+        assertEquals("com.samsung.settings.FUNCTION_KEY_SETTINGS",
+                CameraConfig.ACTION_SAMSUNG_SIDE_KEY_SETTINGS,
+                "ACTION_SAMSUNG_SIDE_KEY_SETTINGS incorrecta");
+        assertEquals("ProVideo", CameraConfig.MODE_PRO_VIDEO_CAMEL,
+                "MODE_PRO_VIDEO_CAMEL incorrecto");
+        assertEquals("com.sec.android.app.camera.shootingmode.pro.ProMode",
+                CameraConfig.ACTIVITY_NAME_PRO_LEGACY,
+                "ACTIVITY_NAME_PRO_LEGACY incorrecto");
+        assertEquals(2500L, CameraConfig.RAPID_RETURN_LOCKUP_THRESHOLD_MS,
+                "RAPID_RETURN_LOCKUP_THRESHOLD_MS debe ser 2500L");
+        assertEquals(350L, CameraConfig.RECOVERY_HAL_COOLDOWN_MS,
+                "RECOVERY_HAL_COOLDOWN_MS debe ser 350L");
     }
 
     private static void testCameraIdsAndConstants() {

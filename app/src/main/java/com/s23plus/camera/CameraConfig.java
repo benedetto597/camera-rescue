@@ -13,7 +13,7 @@ public final class CameraConfig {
 
     /** Identidad y versión oficial de la aplicación. */
     public static final String APP_TITLE = "Samsung Camera Rescue";
-    public static final String APP_VERSION = "1.3.0";
+    public static final String APP_VERSION = "1.4.0";
 
     /** Nombres cortos para los botones principales de la interfaz moderna (v1.0.1). */
     public static final String BTN_FRONT_SHUTTER_SHORT = "Tomar Selfie";
@@ -75,8 +75,10 @@ public final class CameraConfig {
 
     public static final String MODE_PRO_PHOTO = "Pro";
     public static final String ACTIVITY_NAME_PRO_PHOTO = "com.sec.android.app.camera.shootingmode.pro";
+    public static final String ACTIVITY_NAME_PRO_LEGACY = "com.sec.android.app.camera.shootingmode.pro.ProMode";
 
     public static final String MODE_PRO_VIDEO = "Pro video";
+    public static final String MODE_PRO_VIDEO_CAMEL = "ProVideo";
     public static final String ACTIVITY_NAME_PRO_VIDEO = "com.sec.android.app.camera.shootingmode.provideo";
 
     public static final String FACING_BACK = "back";
@@ -91,6 +93,13 @@ public final class CameraConfig {
     public static final String ACTION_LAUNCH_FRONT = "com.s23plus.camera.action.LAUNCH_FRONT";
     public static final String EXTRA_SHORTCUT_SENSOR_ID = "extra_shortcut_sensor_id";
     public static final int MAX_DYNAMIC_SHORTCUTS = 4;
+
+    /** Constantes de recuperación rápida, ajustes de cámara Samsung y umbrales heurísticos (v1.4.0). */
+    public static final String ACTION_QUICK_RECOVERY = "com.s23plus.camera.action.QUICK_RECOVERY";
+    public static final String SAMSUNG_CAMERA_SETTINGS_ACTIVITY = "com.sec.android.app.camera.setting.CameraSettingActivity";
+    public static final String ACTION_SAMSUNG_SIDE_KEY_SETTINGS = "com.samsung.settings.FUNCTION_KEY_SETTINGS";
+    public static final long RAPID_RETURN_LOCKUP_THRESHOLD_MS = 2500L;
+    public static final long RECOVERY_HAL_COOLDOWN_MS = 350L;
 
     /**
      * Proporciones verificadas en el visor óptico de Samsung S23+ (1080x2340) durante el modo Escáner QR,

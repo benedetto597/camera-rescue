@@ -30,6 +30,7 @@ $PureSources = @(
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\DynamicUiBuilder.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraViewerMath.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\VideoRecordingState.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\DiagnosticProfileCodec.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SamsungModelDatabaseTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\ShootingModeMapTest.java"),
@@ -38,7 +39,8 @@ $PureSources = @(
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SensorSelectionStateTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\DynamicUiBuilderTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraViewerMathTest.java"),
-    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\VideoRecordingStateTest.java")
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\VideoRecordingStateTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\DiagnosticProfileCodecTest.java")
 )
 
 & $Javac -encoding UTF-8 -d $OutDir $PureSources
@@ -79,3 +81,7 @@ if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando CameraViewerMathTest" }
 Write-Host "Ejecutando VideoRecordingStateTest..."
 & $Java -cp $OutDir com.s23plus.camera.VideoRecordingStateTest
 if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando VideoRecordingStateTest" }
+
+Write-Host "Ejecutando DiagnosticProfileCodecTest..."
+& $Java -cp $OutDir com.s23plus.camera.DiagnosticProfileCodecTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando DiagnosticProfileCodecTest" }

@@ -5,8 +5,8 @@
 ## 1. Estado Actual Verificado
 
 - **Versión liberada:** `v1.3.0` (`versionCode = 4`, `minSdk = 30`, `targetSdk = 34`, `compileSdk = 34`)
-- **Rama principal:** `main` (sincronizada con `origin/main`)
-- **Último commit de código/documentación previo al handoff:** `328fd62` (`docs: document v1.3.0 dynamic selector, UI builder, shortcuts, and quick tile`)
+- **Rama principal:** `main` (sincronizada con `origin/main` sobre `1ea46d4` + `8c7b8bc`)
+- **Último commit de código/documentación previo al ajuste de rebase:** `6094462` (`docs: document v1.3.0 dynamic selector, UI builder, shortcuts, and quick tile`)
 - **Tag de lanzamiento:** `v1.3.0`
 - **Artefacto APK local verificado:** `dist/camera-rescue-v1.3.0.apk` (`58,572` bytes, firmado v1+v2+v3 con `apksigner`)
 - **Estado de pruebas unitarias (`scripts/test-local.ps1`):** **28/28 PASS** en 4 suites puras de Java:
@@ -22,11 +22,11 @@
 
 | Commit | Alcance | Archivos Clave |
 | :--- | :--- | :--- |
-| `82c1598` | Modelos puros, estado de selección y constantes `v1.3.0` | `CameraConfig.java`, `RescueActionSpec.java`, `SensorSelectionState.java`, `CameraConfigTest.java`, `SensorSelectionStateTest.java`, `scripts/test-local.ps1` |
-| `733b46c` | Motor `DynamicUiBuilder` + corrección de polaridad `facing` y deduplicación en `SensorScanner` | `DynamicUiBuilder.java`, `DynamicUiBuilderTest.java`, `SensorScanner.java`, `scripts/test-local.ps1` |
-| `3370b2a` | Persistencia, Launcher App Shortcuts, Quick Settings Tile, iconos vectoriales y `AndroidManifest.xml` | `RescuePreferences.java`, `RescueShortcutManager.java`, `CameraRescueTileService.java`, `ic_qs_camera_rescue.xml`, `ic_shortcut_{pro,qr,video,front}.xml`, `AndroidManifest.xml` |
-| `8eb91bc` | Checklist interactivo (`CheckBox`), reconstrucción dinámica de tarjetas y visor frontal, despacho `singleTask` y sincronización Gradle/CI | `MainActivity.java`, `FrontCameraController.java`, `app/build.gradle.kts`, `scripts/build-local.ps1`, `.github/workflows/release-apk.yml` |
-| `328fd62` | Documentación de arquitectura/roadmap/README, plan de `v1.3.0` y APK firmado | `README.md`, `docs/ROADMAP.md`, `docs/architecture.md`, `docs/superpowers/plans/2026-11-25-v1.3.0-dynamic-selector-ui-builder.md`, `dist/camera-rescue-v1.3.0.apk` |
+| `336925f` | Modelos puros, estado de selección y constantes `v1.3.0` | `CameraConfig.java`, `RescueActionSpec.java`, `SensorSelectionState.java`, `CameraConfigTest.java`, `SensorSelectionStateTest.java`, `scripts/test-local.ps1` |
+| `809b896` | Motor `DynamicUiBuilder` + corrección de polaridad `facing` y deduplicación en `SensorScanner` | `DynamicUiBuilder.java`, `DynamicUiBuilderTest.java`, `SensorScanner.java`, `scripts/test-local.ps1` |
+| `f07d976` | Persistencia, Launcher App Shortcuts, Quick Settings Tile, iconos vectoriales y `AndroidManifest.xml` | `RescuePreferences.java`, `RescueShortcutManager.java`, `CameraRescueTileService.java`, `ic_qs_camera_rescue.xml`, `ic_shortcut_{pro,qr,video,front}.xml`, `AndroidManifest.xml` |
+| `25f32ff` | Checklist interactivo (`CheckBox`), reconstrucción dinámica de tarjetas y visor frontal, despacho `singleTask` y sincronización Gradle/CI | `MainActivity.java`, `FrontCameraController.java`, `app/build.gradle.kts`, `scripts/build-local.ps1`, `.github/workflows/release-apk.yml` |
+| `6094462` | Documentación de arquitectura/roadmap/README, plan de `v1.3.0` y APK firmado | `README.md`, `docs/ROADMAP.md`, `docs/architecture.md`, `docs/superpowers/plans/2026-11-25-v1.3.0-dynamic-selector-ui-builder.md`, `dist/camera-rescue-v1.3.0.apk` |
 
 ---
 

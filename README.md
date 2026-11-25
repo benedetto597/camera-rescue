@@ -4,9 +4,9 @@
 > **In English.** Offline Android camera app that keeps Samsung Galaxy phones (S9 to S25) usable when one rear camera sensor fails. The full documentation below is in Spanish.
 
 - **Problem:** when a secondary sensor (for example the ultra-wide) fails, Samsung's camera HAL aborts the whole logical multi-camera session, so every camera app crashes even though the main, telephoto and front sensors still work.
-- **Approach:** found which Samsung shooting modes open a single physical sensor (Pro, Pro Video, QR scanner) and launches them directly; the front cameras run in a native Camera2 viewfinder. An on-device scanner tests each sensor on a background `HandlerThread` and reports its health.
+- **Approach:** found which Samsung shooting modes open a single physical sensor (Pro, Pro Video, QR scanner) and launches them directly; the front cameras run in a native Camera2 viewfinder. An on-device scanner tests each sensor on a background `HandlerThread`, lets users toggle healthy sensors in an interactive checklist, and dynamically builds rescue cards, Launcher App Shortcuts, and a Quick Settings Tile.
 - **Stack:** Java, Android Camera2 API, Gradle (Kotlin DSL), GitHub Actions (signed APK released on `v*` tags).
-- **Build:** `scripts/build-local.ps1` produces `dist/camera-rescue-v1.2.0.apk`; install with `adb install -r`.
+- **Build:** `scripts/build-local.ps1` produces `dist/camera-rescue-v1.3.0.apk`; install with `adb install -r`.
 
 Aplicación de cámara minimalista, limpia, segura y **100% offline** diseñada específicamente para rescatar la funcionalidad fotográfica en dispositivos **Samsung Galaxy** cuando un módulo físico secundario (como el Ultra-Wide `sensorId 2` / `IMX564`) presenta fallo de hardware (EEPROM/I2C), dejando intactos el **lente trasero Principal 1x (`S5KGN3`, `ID 56`)**, el **Telefoto 3x (`S5K3K1`, `ID 52`)** y las **dos cámaras frontales (`S5K3LU`, `ID 1` e `ID 3`)**.
 

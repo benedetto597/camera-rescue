@@ -21,6 +21,8 @@ $PureSources = @(
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraConfig.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SamsungModelDatabase.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\ShootingModeMap.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\OneUiAssistantGuide.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraRecoveryEngine.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SensorHealth.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\DiscoveredSensor.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\RescueActionSpec.java"),
@@ -29,6 +31,8 @@ $PureSources = @(
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SamsungModelDatabaseTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\ShootingModeMapTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\OneUiAssistantGuideTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraRecoveryEngineTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SensorSelectionStateTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\DynamicUiBuilderTest.java")
 )
@@ -47,6 +51,14 @@ if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando SamsungModelDatabaseTest" }
 Write-Host "Ejecutando ShootingModeMapTest..."
 & $Java -cp $OutDir com.s23plus.camera.ShootingModeMapTest
 if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando ShootingModeMapTest" }
+
+Write-Host "Ejecutando OneUiAssistantGuideTest..."
+& $Java -cp $OutDir com.s23plus.camera.OneUiAssistantGuideTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando OneUiAssistantGuideTest" }
+
+Write-Host "Ejecutando CameraRecoveryEngineTest..."
+& $Java -cp $OutDir com.s23plus.camera.CameraRecoveryEngineTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando CameraRecoveryEngineTest" }
 
 Write-Host "Ejecutando SensorSelectionStateTest..."
 & $Java -cp $OutDir com.s23plus.camera.SensorSelectionStateTest

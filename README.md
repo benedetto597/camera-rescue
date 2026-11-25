@@ -4,9 +4,9 @@
 > **In English.** Offline Android camera app that keeps Samsung Galaxy phones (S9 to S25) usable when one rear camera sensor fails. The full documentation below is in Spanish.
 
 - **Problem:** when a secondary sensor (for example the ultra-wide) fails, Samsung's camera HAL aborts the whole logical multi-camera session, so every camera app crashes even though the main, telephoto and front sensors still work.
-- **Approach:** found which Samsung shooting modes open a single physical sensor (Pro, Pro Video, QR scanner) and launches them directly; the front cameras run in a native Camera2 viewfinder. An on-device scanner tests each sensor on a background `HandlerThread`, lets users toggle healthy sensors in an interactive checklist, and dynamically builds rescue cards, Launcher App Shortcuts, and a Quick Settings Tile.
+- **Approach:** found which Samsung shooting modes open a single physical sensor (Pro, Pro Video, QR scanner) and launches them directly via a One UI-aware `ShootingModeMap` (covering Galaxy S9–S25, Note 9–20, Z Fold/Flip 1–6, and A series); the front cameras run in a native Camera2 viewfinder. Includes an on-device sensor scanner & checklist, Launcher App Shortcuts, a Quick Settings Tile, a guided One UI Assistant ("Settings to keep" & Side Button double-press), and staged fast camera recovery for HAL lockups.
 - **Stack:** Java, Android Camera2 API, Gradle (Kotlin DSL), GitHub Actions (signed APK released on `v*` tags).
-- **Build:** `scripts/build-local.ps1` produces `dist/camera-rescue-v1.3.0.apk`; install with `adb install -r`.
+- **Build:** `scripts/build-local.ps1` produces `dist/camera-rescue-v1.4.0.apk`; install with `adb install -r`.
 
 Aplicación de cámara minimalista, limpia, segura y **100% offline** diseñada específicamente para rescatar la funcionalidad fotográfica en dispositivos **Samsung Galaxy** cuando un módulo físico secundario (como el Ultra-Wide `sensorId 2` / `IMX564`) presenta fallo de hardware (EEPROM/I2C), dejando intactos el **lente trasero Principal 1x (`S5KGN3`, `ID 56`)**, el **Telefoto 3x (`S5K3K1`, `ID 52`)** y las **dos cámaras frontales (`S5K3LU`, `ID 1` e `ID 3`)**.
 
@@ -28,25 +28,23 @@ Documentación técnica completa:
 
 ---
 
-## ✨ Características Principales (`v1.3.0`)
+## ✨ Características Principales (`v1.4.0`)
 
-1. **Selector Múltiple Dinámico & UI Builder (`v1.3.0`):**
+1. **Mapeador Heurístico `ShootingModeMap` & Catálogo Ampliado (`v1.4.0`):**
+   - **Catálogo S9–S25, FE, Note 9–20, Z Fold/Flip 1–6 y Serie A (`SamsungModelDatabase`):** Perfiles enriquecidos con soporte nativo de Video Pro, apertura mecánica variable ($f/1.5 \leftrightarrow f/2.4$ en S9/S10/Note 9–10) y riesgo de cable flex de bisagra en plegables.
+   - **Resolución Adaptativa por One UI (`ShootingModeMap`):** Detecta automáticamente la generación de One UI (`2.x` hasta `8+` vía `SEM_PLATFORM_INT` / nivel de API) y genera variantes de lanzamiento ordenadas con respaldo automático (`Pro`, `ProMode`, `ProVideo`, `SCAN_QR_CODE`).
+2. **Asistente Interactivo One UI (`OneUiAssistantGuide` + `OneUiSystemBridge`):**
+   - Guía paso a paso persistente (`4` pasos con `CheckBox`) para activar **"Ajustes para conservar → Modo de cámara"** (*Settings to keep*) y configurar la **Tecla / Botón lateral (doble toque)** con accesos directos a los ajustes de Samsung.
+3. **Recuperación Rápida ante Bloqueos de Cámara (`CameraRecoveryEngine`):**
+   - Detecta retornos rápidos tras cierres de la app nativa (`≤ 2.5 s`) y errores de bloqueo HAL en `Camera2`, ofreciendo recuperación escalonada en 4 etapas (Modo Pro primario → Variante alterna → Aislamiento 1x vía QR → App Info / Forzar detención) y botón de reinicio local del visor.
+4. **Selector Múltiple Dinámico & UI Builder (`v1.3.0`):**
    - **Checklist Interactivo de Sensores:** Tras el escaneo on-device, permite habilitar o deshabilitar manualmente mediante casillas (`CheckBox`) qué lentes funcionales (`🟢 Operativo` / `🔒 Modo Pro Requerido`) desea usar el usuario, persistiendo la selección en `RescuePreferences`.
-   - **Generación Adaptativa de Tarjetas (`DynamicUiBuilder`):** Reconstruye dinámicamente las tarjetas de rescate trasero (Pro, QR y Video Pro) y los botones frontales según los sensores seleccionados y las capacidades reales del modelo (por ejemplo, omitiendo menciones de Telefoto o el modo QR cuando solo se selecciona un lente auxiliar).
-   - **App Shortcuts Dinámicos (`RescueShortcutManager`):** Publica hasta 4 accesos directos dinámicos en el Launcher (`ShortcutManager`) y permite fijar atajos en la pantalla de inicio para abrir directamente el modo deseado.
-   - **Quick Settings Tile (`CameraRescueTileService`):** Mosaico nativo en la barra de Ajustes Rápidos de Android configurable desde la app, compatible con Android 11–16 (incluyendo el flujo seguro con `PendingIntent` en Android 14+ / API 34+).
-2. **Motor de Diagnóstico y Escáner On-Device (*Canary Testing*):**
-   - **`SamsungModelDatabase`:** Catálogo heurístico offline que detecta automáticamente el modelo exacto del dispositivo (`Build.MODEL`, series S9 a S25 Ultra, Note, Fold/Flip y Serie A) y asigna sus sensores de hardware e IDs de bypass.
-   - **`SensorScanner`:** Pruebas secuenciales no bloqueantes en un hilo de fondo dedicado (`HandlerThread`) sobre `CameraManager` para probar cada lente y aislar averías de hardware en el bus I2C o EEPROM.
-   - **Clasificador Visual de Salud:** Muestra en pantalla el estado exacto de cada lente (`🟢 Operativo`, `🔴 Dañado / Error I2C`, `🔒 Modo Pro Requerido`).
-3. **Visor Frontal Nativo `Camera2` (`ID 1` y `ID 3`) Integrado:**
-   - Vista previa fluida en tiempo real (`TextureView`).
-   - Conmutación dinámica entre las lentes frontales activas en el checklist (por defecto **`ID 1` 12 MP Gran Angular** e **`ID 3` 8.6 MP Normal**).
-   - Disparo directo y guardado transaccional JPEG en `Pictures/S23Camera`.
-4. **Lanzador Directo Trasero — Modo Pro ISP (`device 56` y `device 52`):**
-   - Abre la cámara nativa en Modo Pro (`ShootingMode 3`) y Video Pro (`ShootingMode 36`) sobre los sensores desacoplados `device 56` (1x Principal) y `device 52` (3x Telefoto), omitiendo el chequeo del sensor dañado.
-5. **Lanzador Trasero 1x vía Escáner QR + HUD Flotante (`device 56`):**
-   - Abre el visor `SCAN_QR_CODE` (`device 56`) y superpone la barra flotante minimalista (`RearCaptureService`) con botón **Capturar** y selector de recorte (**Visor** vs **Completo**).
+   - **Generación Adaptativa de Tarjetas (`DynamicUiBuilder`):** Reconstruye dinámicamente las tarjetas de rescate trasero (Pro, QR y Video Pro) y los botones frontales según los sensores seleccionados y las capacidades reales del modelo.
+   - **App Shortcuts Dinámicos (`RescueShortcutManager`) y Quick Settings Tile (`CameraRescueTileService`):** Hasta 4 accesos directos en el Launcher y mosaico en Ajustes Rápidos configurable (incluyendo disparo directo de **Recuperación**).
+5. **Motor de Diagnóstico y Escáner On-Device (*Canary Testing*):**
+   - **`SensorScanner`:** Pruebas secuenciales no bloqueantes en un hilo de fondo dedicado (`HandlerThread`) sobre `CameraManager` para aislar averías de hardware en el bus I2C o EEPROM.
+6. **Visor Frontal Nativo `Camera2` Integrado y Lanzadores Traseros (`Pro`, `Video Pro`, `QR + HUD`):**
+   - Vista previa en tiempo real (`TextureView`), conmutación dinámica entre lentes frontales sanas, guardado transaccional JPEG en `Pictures/S23Camera`, y captura trasera vía `ShootingMode 3`, `36` y `40` (`RearCaptureService`).
 
 ---
 
@@ -71,11 +69,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test-local.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-local.ps1
 ```
-El APK firmado se genera en `dist/camera-rescue-v1.3.0.apk`.
+El APK firmado se genera en `dist/camera-rescue-v1.4.0.apk`.
 
 ### Instalar en el dispositivo vía ADB
 ```powershell
-adb install -r .\dist\camera-rescue-v1.3.0.apk
+adb install -r .\dist\camera-rescue-v1.4.0.apk
 ```
 
 ---
@@ -84,7 +82,7 @@ adb install -r .\dist\camera-rescue-v1.3.0.apk
 
 El workflow [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) está configurado para ejecutarse **únicamente cuando se envía un tag de versión (`v*`)**:
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 Esto mantiene el consumo de minutos de CI en `0` durante el desarrollo normal.

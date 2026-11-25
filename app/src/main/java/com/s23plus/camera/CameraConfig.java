@@ -13,7 +13,7 @@ public final class CameraConfig {
 
     /** Identidad y versión oficial de la aplicación. */
     public static final String APP_TITLE = "Samsung Camera Rescue";
-    public static final String APP_VERSION = "1.4.0";
+    public static final String APP_VERSION = "2.0.0";
 
     /** Nombres cortos para los botones principales de la interfaz moderna (v1.0.1). */
     public static final String BTN_FRONT_SHUTTER_SHORT = "Tomar Selfie";
@@ -100,6 +100,20 @@ public final class CameraConfig {
     public static final String ACTION_SAMSUNG_SIDE_KEY_SETTINGS = "com.samsung.settings.FUNCTION_KEY_SETTINGS";
     public static final long RAPID_RETURN_LOCKUP_THRESHOLD_MS = 2500L;
     public static final long RECOVERY_HAL_COOLDOWN_MS = 350L;
+
+    /** Constantes del visor Camera2 universal integrado y grabación MP4 transaccional (v2.0.0). */
+    public static final String VIDEO_RELATIVE_PATH = "Movies/S23Camera";
+    public static final String ACTION_OPEN_INTEGRATED_VIEWER = "com.s23plus.camera.action.OPEN_INTEGRATED_VIEWER";
+    public static final String BTN_VIEWER_PHOTO_SHORT = "Foto";
+    public static final String BTN_VIEWER_VIDEO_SHORT = "Grabar MP4";
+    public static final String BTN_VIEWER_VIDEO_STOP_SHORT = "Detener";
+    public static final String TECH_DESC_UNIVERSAL_VIEWER =
+            "Visor nativo Camera2 universal integrado para sensores frontales y traseros públicos funcionales.\n"
+            + "• Control de zoom por CONTROL_ZOOM_RATIO (API 30+) o SCALER_CROP_REGION.\n"
+            + "• Compensación EV, flash/linterna, temporizador, cuadrícula y apertura LENS_APERTURE f/1.5-f/2.4 en S9/S10/Note 9-10.\n"
+            + "• Captura JPEG transaccional en Pictures/S23Camera y video MP4 transaccional en Movies/S23Camera.";
+    public static final int PROFILE_SCHEMA_VERSION = 1;
+    public static final long MIN_VALID_VIDEO_DURATION_MS = 600L;
 
     /**
      * Proporciones verificadas en el visor óptico de Samsung S23+ (1080x2340) durante el modo Escáner QR,

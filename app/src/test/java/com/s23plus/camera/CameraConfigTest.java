@@ -11,16 +11,17 @@ public final class CameraConfigTest {
         testAppBrandingAndShortLabels();
         testV130ActionConstants();
         testV140HeuristicAndRecoveryConstants();
+        testV200UniversalViewerAndVideoConstants();
         testToggleFrontCameraId();
         testCleanCropBoundsOnS23PlusResolution();
         testFullFrameCropBounds();
         testInvalidDimensionsThrowException();
-        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (8/8).");
+        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (9/9).");
     }
 
     private static void testAppBrandingAndShortLabels() {
         assertEquals("Samsung Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
-        assertEquals("1.4.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.4.0");
+        assertEquals("2.0.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 2.0.0");
         assertTrue(CameraConfig.BTN_REAR_PRO_SHORT.length() <= 24, "Nombre corto de boton Pro debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_QR_SHORT.length() <= 26, "Nombre corto de boton QR debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_VIDEO_SHORT.length() <= 24, "Nombre corto de boton Video debe ser conciso");
@@ -65,6 +66,34 @@ public final class CameraConfigTest {
                 "RAPID_RETURN_LOCKUP_THRESHOLD_MS debe ser 2500L");
         assertEquals(350L, CameraConfig.RECOVERY_HAL_COOLDOWN_MS,
                 "RECOVERY_HAL_COOLDOWN_MS debe ser 350L");
+    }
+
+    private static void testV200UniversalViewerAndVideoConstants() {
+        assertEquals("Movies/S23Camera", CameraConfig.VIDEO_RELATIVE_PATH,
+                "VIDEO_RELATIVE_PATH debe ser Movies/S23Camera");
+        assertEquals("com.s23plus.camera.action.OPEN_INTEGRATED_VIEWER",
+                CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER,
+                "ACTION_OPEN_INTEGRATED_VIEWER incorrecta");
+        assertEquals("Foto", CameraConfig.BTN_VIEWER_PHOTO_SHORT,
+                "BTN_VIEWER_PHOTO_SHORT incorrecto");
+        assertEquals("Grabar MP4", CameraConfig.BTN_VIEWER_VIDEO_SHORT,
+                "BTN_VIEWER_VIDEO_SHORT incorrecto");
+        assertEquals("Detener", CameraConfig.BTN_VIEWER_VIDEO_STOP_SHORT,
+                "BTN_VIEWER_VIDEO_STOP_SHORT incorrecto");
+        assertEquals(1, CameraConfig.PROFILE_SCHEMA_VERSION,
+                "PROFILE_SCHEMA_VERSION debe ser 1");
+        assertEquals(600L, CameraConfig.MIN_VALID_VIDEO_DURATION_MS,
+                "MIN_VALID_VIDEO_DURATION_MS debe ser 600L");
+
+        String desc = CameraConfig.TECH_DESC_UNIVERSAL_VIEWER;
+        assertTrue(desc != null && !desc.trim().isEmpty(), "TECH_DESC_UNIVERSAL_VIEWER no debe estar vacio");
+        assertTrue(desc.contains("Camera2"), "TECH_DESC_UNIVERSAL_VIEWER debe mencionar Camera2");
+        assertTrue(desc.contains("CONTROL_ZOOM_RATIO") && desc.contains("SCALER_CROP_REGION"),
+                "TECH_DESC_UNIVERSAL_VIEWER debe documentar estrategias de zoom");
+        assertTrue(desc.contains("LENS_APERTURE") && desc.contains("f/1.5") && desc.contains("f/2.4"),
+                "TECH_DESC_UNIVERSAL_VIEWER debe documentar apertura dual S9/S10/Note 9-10");
+        assertTrue(desc.contains("Pictures/S23Camera") && desc.contains("Movies/S23Camera"),
+                "TECH_DESC_UNIVERSAL_VIEWER debe documentar rutas JPEG y MP4");
     }
 
     private static void testCameraIdsAndConstants() {

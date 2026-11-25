@@ -28,13 +28,17 @@ $PureSources = @(
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\RescueActionSpec.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\SensorSelectionState.java"),
     (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\DynamicUiBuilder.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\CameraViewerMath.java"),
+    (Join-Path $ProjectRoot "app\src\main\java\com\s23plus\camera\VideoRecordingState.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraConfigTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SamsungModelDatabaseTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\ShootingModeMapTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\OneUiAssistantGuideTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraRecoveryEngineTest.java"),
     (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\SensorSelectionStateTest.java"),
-    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\DynamicUiBuilderTest.java")
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\DynamicUiBuilderTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\CameraViewerMathTest.java"),
+    (Join-Path $ProjectRoot "app\src\test\java\com\s23plus\camera\VideoRecordingStateTest.java")
 )
 
 & $Javac -encoding UTF-8 -d $OutDir $PureSources
@@ -67,3 +71,11 @@ if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando SensorSelectionStateTest" }
 Write-Host "Ejecutando DynamicUiBuilderTest..."
 & $Java -cp $OutDir com.s23plus.camera.DynamicUiBuilderTest
 if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando DynamicUiBuilderTest" }
+
+Write-Host "Ejecutando CameraViewerMathTest..."
+& $Java -cp $OutDir com.s23plus.camera.CameraViewerMathTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando CameraViewerMathTest" }
+
+Write-Host "Ejecutando VideoRecordingStateTest..."
+& $Java -cp $OutDir com.s23plus.camera.VideoRecordingStateTest
+if ($LASTEXITCODE -ne 0) { throw "Fallo ejecutando VideoRecordingStateTest" }

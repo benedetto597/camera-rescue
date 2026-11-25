@@ -20,7 +20,8 @@ public final class DynamicUiBuilderTest {
         testPostScanAllRearDamagedOrUnchecked();
         testPostScanAllFrontUnchecked();
         testPostScanPublicRearFallbackAndNullProfile();
-        System.out.println("PASS: Todas las pruebas unitarias de DynamicUiBuilderTest finalizaron con exito (8/8).");
+        testSelectablePublicViewerAndRearSensors();
+        System.out.println("PASS: Todas las pruebas unitarias de DynamicUiBuilderTest finalizaron con exito (9/9).");
     }
 
     private static List<DiscoveredSensor> s23PlusScanResults() {
@@ -201,6 +202,49 @@ public final class DynamicUiBuilderTest {
         assertEquals("0", rearSpecs.get(1).sensorId, "QR sensorId debe ser '0'");
         assertContains(rearSpecs.get(0).subtitle, "0", "Subtitle debe mencionar ID 0");
         assertUnmodifiable(rearSpecs);
+    }
+
+    private static void testSelectablePublicViewerAndRearSensors() {
+        List<DiscoveredSensor> mixed = Arrays.asList(
+                new DiscoveredSensor("0", "Trasera Principal", 0, 4032, 3024, 4.3f, 1.5f, SensorHealth.HEALTHY, "OK"),
+                new DiscoveredSensor("2", "Ultra-Wide", 0, 4000, 3000, 2.2f, 2.2f, SensorHealth.DAMAGED, "I2C fail"),
+                new DiscoveredSensor("56", "Pro 1x", 0, 4080, 3060, 5.4f, 1.8f, SensorHealth.HAL_PRIVATE, "Privado"),
+                new DiscoveredSensor("1", "Frontal Wide", 1, 4000, 3000, 3.3f, 2.2f, SensorHealth.HEALTHY, "OK"),
+                new DiscoveredSensor("99", "Desconocido", 0, 0, 0, 0f, 0f, SensorHealth.UNKNOWN, "?")
+        );
+
+        assertTrue(DynamicUiBuilder.getSelectablePublicViewerSensors(null, null).isEmpty(),
+                "null discovered debe retornar lista vacia");
+        assertTrue(DynamicUiBuilder.getSelectablePublicRearSensors(Collections.emptyList(), null).isEmpty(),
+                "empty discovered debe retornar lista vacia");
+
+        List<DiscoveredSensor> defaultViewer = DynamicUiBuilder.getSelectablePublicViewerSensors(mixed, null);
+        assertEquals(2, defaultViewer.size(), "Solo HEALTHY (0 y 1) deben ser elegibles para visor publico");
+        assertEquals("0", defaultViewer.get(0).id, "Primer sensor publico debe ser 0");
+        assertEquals("1", defaultViewer.get(1).id, "Segundo sensor publico debe ser 1");
+        assertUnmodifiableSensors(defaultViewer);
+
+        List<DiscoveredSensor> defaultRear = DynamicUiBuilder.getSelectablePublicRearSensors(mixed, null);
+        assertEquals(1, defaultRear.size(), "Solo el trasero HEALTHY 0 debe aparecer en public rear");
+        assertEquals("0", defaultRear.get(0).id, "Public rear debe ser ID 0");
+        assertUnmodifiableSensors(defaultRear);
+
+        Set<String> onlyFrontAndHal = new HashSet<>(Arrays.asList("1", "56"));
+        List<DiscoveredSensor> filteredViewer = DynamicUiBuilder.getSelectablePublicViewerSensors(mixed, onlyFrontAndHal);
+        assertEquals(1, filteredViewer.size(), "HAL_PRIVATE 56 no debe incluirse en visor publico");
+        assertEquals("1", filteredViewer.get(0).id, "Solo frontal 1 debe quedar seleccionado");
+        assertTrue(DynamicUiBuilder.getSelectablePublicRearSensors(mixed, onlyFrontAndHal).isEmpty(),
+                "Public rear debe estar vacio si 0 no fue seleccionado");
+    }
+
+    private static void assertUnmodifiableSensors(List<DiscoveredSensor> list) {
+        boolean threw = false;
+        try {
+            list.clear();
+        } catch (UnsupportedOperationException expected) {
+            threw = true;
+        }
+        assertTrue(threw, "La lista de sensores devuelta debe ser inmodificable");
     }
 
     private static void assertUnmodifiable(List<RescueActionSpec> list) {

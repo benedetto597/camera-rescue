@@ -107,6 +107,54 @@ public final class DynamicUiBuilder {
     }
 
     /**
+     * Retorna los sensores saludables y seleccionados (frontales y traseros públicos) aptos para el visor Camera2.
+     */
+    public static List<DiscoveredSensor> getSelectablePublicViewerSensors(
+            List<DiscoveredSensor> discoveredSensors,
+            Set<String> selectedSensorIds
+    ) {
+        if (discoveredSensors == null || discoveredSensors.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<String> effectiveSelected =
+                SensorSelectionState.sanitizeSelection(selectedSensorIds, discoveredSensors);
+
+        List<DiscoveredSensor> viewerSensors = new ArrayList<>();
+        for (DiscoveredSensor sensor : discoveredSensors) {
+            if (sensor != null
+                    && sensor.health == SensorHealth.HEALTHY
+                    && (sensor.facing == 0 || sensor.facing == 1)
+                    && effectiveSelected.contains(sensor.id)) {
+                viewerSensors.add(sensor);
+            }
+        }
+        return Collections.unmodifiableList(viewerSensors);
+    }
+
+    /**
+     * Retorna únicamente los sensores traseros públicos saludables y seleccionados para el visor Camera2.
+     */
+    public static List<DiscoveredSensor> getSelectablePublicRearSensors(
+            List<DiscoveredSensor> discoveredSensors,
+            Set<String> selectedSensorIds
+    ) {
+        List<DiscoveredSensor> viewerSensors =
+                getSelectablePublicViewerSensors(discoveredSensors, selectedSensorIds);
+        if (viewerSensors.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<DiscoveredSensor> rearSensors = new ArrayList<>();
+        for (DiscoveredSensor sensor : viewerSensors) {
+            if (sensor.facing == 0) {
+                rearSensors.add(sensor);
+            }
+        }
+        return Collections.unmodifiableList(rearSensors);
+    }
+
+    /**
      * Genera las especificaciones para los accesos directos dinámicos del lanzador (máximo 4).
      */
     public static List<RescueActionSpec> buildShortcutSpecs(

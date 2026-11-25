@@ -12,13 +12,21 @@ package com.s23plus.camera;
 public final class CameraConfig {
 
     /** Identidad y versión oficial de la aplicación. */
-    public static final String APP_TITLE = "Samsung Camera Rescue";
-    public static final String APP_VERSION = "2.0.0";
+    public static final String APP_TITLE = "Rescue Cam: Sensor Recovery";
+    public static final String APP_SHORT_NAME = "Rescue Cam";
+    public static final String APP_VERSION = "2.1.0";
+    public static final int APP_VERSION_CODE = 7;
+    public static final String PLAY_APPLICATION_ID = "io.github.benedetto597.rescuecam";
+    public static final int TARGET_PLAY_SDK = 36;
+    public static final String PRIVACY_POLICY_URL = "https://benedetto597.github.io/camera-rescue/privacy-policy.html";
+    public static final String TRADEMARK_DISCLAIMER =
+            "Rescue Cam es una herramienta de utilidad independiente. No está afiliada, autorizada, respaldada ni conectada con Samsung Electronics Co., Ltd. "
+            + "Los términos 'Samsung', 'Galaxy' y 'One UI' se utilizan únicamente con fines descriptivos de compatibilidad técnica de hardware.";
 
     /** Nombres cortos para los botones principales de la interfaz moderna (v1.0.1). */
     public static final String BTN_FRONT_SHUTTER_SHORT = "Tomar Selfie";
     public static final String BTN_REAR_PRO_SHORT = "Cámara Trasera Pro";
-    public static final String BTN_REAR_QR_SHORT = "Trasera Rápida (QR)";
+    public static final String BTN_REAR_QR_SHORT = "Escáner QR 1x";
     public static final String BTN_REAR_VIDEO_SHORT = "Video Trasero Pro";
 
     /** Descripciones técnicas desplegables (acordeón ▾/▴) para cada módulo de cámara. */
@@ -26,7 +34,7 @@ public final class CameraConfig {
             "Pipeline Camera2 directo sobre el sensor frontal S5K3LU (sin pasar por la app nativa).\n"
             + "• ID 1: 12 MP Gran Angular (4000×3000, f/2.2, 3.3 mm).\n"
             + "• ID 3: 8.6 MP Recorte Normal (3392×2544).\n"
-            + "• Guardado transaccional JPEG 95% en Pictures/S23Camera.";
+            + "• Guardado transaccional JPEG 95% en Pictures/RescueCam.";
 
     public static final String TECH_DESC_REAR_PRO =
             "Inicia Samsung Camera en ShootingMode 3 (Pro) con FLAG_ACTIVITY_CLEAR_TASK.\n"
@@ -36,8 +44,8 @@ public final class CameraConfig {
 
     public static final String TECH_DESC_REAR_QR =
             "Invoca el Intent exportado com.sec.android.app.camera.action.SCAN_QR_CODE (ShootingMode 40).\n"
-            + "• Fuerza la apertura exclusiva del pipeline independiente ID 56 (S5KGN3 1x, numPhysicalCameras: 1).\n"
-            + "• Superpone el HUD flotante de RearCaptureService para capturar el visor óptico limpio y guardarlo en Pictures/S23Camera.";
+            + "• Fuerza la apertura exclusiva del sensor independiente 1x (ID 56, numPhysicalCameras: 1) sin AccessibilityService ni overlays.\n"
+            + "• Para guardar fotos o video en DCIM/Camera o Pictures/RescueCam, utiliza Modo Pro o el Visor Camera2 Universal.";
 
     public static final String TECH_DESC_REAR_VIDEO =
             "Inicia Samsung Camera en ShootingMode 36 (Pro video) con FLAG_ACTIVITY_CLEAR_TASK.\n"
@@ -84,7 +92,7 @@ public final class CameraConfig {
     public static final String FACING_BACK = "back";
 
     /** Directorio relativo en MediaStore donde se almacenan las fotografías tomadas por la app. */
-    public static final String MEDIA_RELATIVE_PATH = "Pictures/S23Camera";
+    public static final String MEDIA_RELATIVE_PATH = "Pictures/RescueCam";
 
     /** Acciones de acceso directo dinámico y deep-link interno para acciones de rescate (v1.3.0). */
     public static final String ACTION_LAUNCH_REAR_PRO = "com.s23plus.camera.action.LAUNCH_REAR_PRO";
@@ -102,7 +110,7 @@ public final class CameraConfig {
     public static final long RECOVERY_HAL_COOLDOWN_MS = 350L;
 
     /** Constantes del visor Camera2 universal integrado y grabación MP4 transaccional (v2.0.0). */
-    public static final String VIDEO_RELATIVE_PATH = "Movies/S23Camera";
+    public static final String VIDEO_RELATIVE_PATH = "Movies/RescueCam";
     public static final String ACTION_OPEN_INTEGRATED_VIEWER = "com.s23plus.camera.action.OPEN_INTEGRATED_VIEWER";
     public static final String BTN_VIEWER_PHOTO_SHORT = "Foto";
     public static final String BTN_VIEWER_VIDEO_SHORT = "Grabar MP4";
@@ -111,7 +119,7 @@ public final class CameraConfig {
             "Visor nativo Camera2 universal integrado para sensores frontales y traseros públicos funcionales.\n"
             + "• Control de zoom por CONTROL_ZOOM_RATIO (API 30+) o SCALER_CROP_REGION.\n"
             + "• Compensación EV, flash/linterna, temporizador, cuadrícula y apertura LENS_APERTURE f/1.5-f/2.4 en S9/S10/Note 9-10.\n"
-            + "• Captura JPEG transaccional en Pictures/S23Camera y video MP4 transaccional en Movies/S23Camera.";
+            + "• Captura JPEG transaccional en Pictures/RescueCam y video MP4 transaccional en Movies/RescueCam.";
     public static final int PROFILE_SCHEMA_VERSION = 1;
     public static final long MIN_VALID_VIDEO_DURATION_MS = 600L;
 

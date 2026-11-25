@@ -41,7 +41,7 @@ public final class DynamicUiBuilderTest {
 
         assertEquals(3, rearSpecs.size(), "Pre-scan S23+ debe generar 3 tarjetas traseras");
         assertEquals(RescueActionSpec.ActionType.REAR_PRO_PHOTO, rearSpecs.get(0).actionType, "Primer spec debe ser REAR_PRO_PHOTO");
-        assertEquals(RescueActionSpec.ActionType.REAR_QR_HUD, rearSpecs.get(1).actionType, "Segundo spec debe ser REAR_QR_HUD");
+        assertEquals(RescueActionSpec.ActionType.REAR_QR_DIRECT, rearSpecs.get(1).actionType, "Segundo spec debe ser REAR_QR_DIRECT");
         assertEquals(RescueActionSpec.ActionType.REAR_PRO_VIDEO, rearSpecs.get(2).actionType, "Tercer spec debe ser REAR_PRO_VIDEO");
 
         assertEquals("56", rearSpecs.get(0).sensorId, "REAR_PRO_PHOTO sensorId debe ser 56");
@@ -50,7 +50,18 @@ public final class DynamicUiBuilderTest {
         assertContains(rearSpecs.get(0).technicalDescription, "56", "Desc tecnica Pro debe mencionar ID 56");
         assertContains(rearSpecs.get(0).technicalDescription, "52", "Desc tecnica Pro debe mencionar ID 52");
 
-        assertContains(rearSpecs.get(1).subtitle, "56", "Subtitle QR debe mencionar ID 56");
+        assertEquals("rear_qr_direct", rearSpecs.get(1).id, "ID de QR directo debe ser rear_qr_direct");
+        assertEquals("Aislamiento Directo 1x · Sin Accesibilidad (ID 56)", rearSpecs.get(1).subtitle,
+                "Subtitle QR directo debe coincidir");
+        assertEquals("QR 1x", rearSpecs.get(1).shortcutShortLabel, "Shortcut short label QR debe ser QR 1x");
+        assertEquals("Abrir Escáner QR 1x", rearSpecs.get(1).shortcutLongLabel,
+                "Shortcut long label QR debe ser Abrir Escáner QR 1x");
+        assertContains(rearSpecs.get(1).technicalDescription, "SCAN_QR_CODE",
+                "Desc tecnica QR debe mencionar SCAN_QR_CODE");
+        assertContains(rearSpecs.get(1).technicalDescription, "Pictures/RescueCam",
+                "Desc tecnica QR debe mencionar Pictures/RescueCam");
+        assertNotContains(rearSpecs.get(1).technicalDescription, "RearCaptureService",
+                "Desc tecnica QR no debe mencionar RearCaptureService");
         assertContains(rearSpecs.get(2).subtitle, "Tele", "Subtitle Video Pro debe mencionar Tele");
         assertContains(rearSpecs.get(2).technicalDescription, "56", "Desc tecnica Video Pro debe mencionar ID 56");
         assertContains(rearSpecs.get(2).technicalDescription, "52", "Desc tecnica Video Pro debe mencionar ID 52");
@@ -114,7 +125,7 @@ public final class DynamicUiBuilderTest {
         Set<String> selected = new HashSet<>(Arrays.asList("52", "1", "3"));
 
         List<RescueActionSpec> rearSpecs = DynamicUiBuilder.buildRearActionSpecs(s23Plus, discovered, selected);
-        assertEquals(2, rearSpecs.size(), "Con solo Tele seleccionado debe omitir REAR_QR_HUD y retornar 2 tarjetas");
+        assertEquals(2, rearSpecs.size(), "Con solo Tele seleccionado debe omitir REAR_QR_DIRECT y retornar 2 tarjetas");
         assertEquals(RescueActionSpec.ActionType.REAR_PRO_PHOTO, rearSpecs.get(0).actionType, "Primera debe ser REAR_PRO_PHOTO");
         assertEquals(RescueActionSpec.ActionType.REAR_PRO_VIDEO, rearSpecs.get(1).actionType, "Segunda debe ser REAR_PRO_VIDEO");
 

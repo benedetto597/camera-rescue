@@ -71,7 +71,7 @@ public final class DynamicUiBuilder {
                 buildProPhotoTechDesc(mainSelected, activeMainOrFirstId, teleSelected, teleId, selectedRear)
         ));
         if (mainSelected) {
-            specs.add(buildQrHudSpec(activeMainOrFirstId));
+            specs.add(buildQrDirectSpec(activeMainOrFirstId));
         }
         specs.add(buildProVideoSpec(
                 primarySensorId,
@@ -224,7 +224,7 @@ public final class DynamicUiBuilder {
                 proSubtitle,
                 buildProPhotoTechDesc(true, mainId, hasTele, teleId, null)
         ));
-        specs.add(buildQrHudSpec(mainId));
+        specs.add(buildQrDirectSpec(mainId));
         specs.add(buildProVideoSpec(
                 mainId,
                 videoSubtitle,
@@ -249,21 +249,21 @@ public final class DynamicUiBuilder {
         );
     }
 
-    private static RescueActionSpec buildQrHudSpec(String mainSensorId) {
+    private static RescueActionSpec buildQrDirectSpec(String mainSensorId) {
         String techDesc = "Invoca el Intent exportado com.sec.android.app.camera.action.SCAN_QR_CODE (ShootingMode 40).\n"
-                + "• Fuerza la apertura exclusiva del pipeline independiente ID " + mainSensorId + " (1x, numPhysicalCameras: 1).\n"
-                + "• Superpone el HUD flotante de RearCaptureService para capturar el visor óptico limpio y guardarlo en Pictures/S23Camera.";
+                + "• Fuerza la apertura exclusiva del sensor independiente 1x (ID " + mainSensorId + ", numPhysicalCameras: 1) sin AccessibilityService ni overlays.\n"
+                + "• Para guardar fotos o video en DCIM/Camera o Pictures/RescueCam, utiliza Modo Pro o el Visor Camera2 Universal.";
         return new RescueActionSpec(
-                "rear_qr_hud",
-                RescueActionSpec.ActionType.REAR_QR_HUD,
+                "rear_qr_direct",
+                RescueActionSpec.ActionType.REAR_QR_DIRECT,
                 mainSensorId,
                 CameraConfig.BTN_REAR_QR_SHORT,
-                "Obturador Flotante Rescue · Lente 1x (ID " + mainSensorId + ")",
+                "Aislamiento Directo 1x · Sin Accesibilidad (ID " + mainSensorId + ")",
                 "#4F46E5",
                 "#818CF8",
                 techDesc,
-                "Trasera QR",
-                "Abrir Trasera Rápida (QR)",
+                "QR 1x",
+                "Abrir Escáner QR 1x",
                 CameraConfig.ACTION_LAUNCH_REAR_QR
         );
     }

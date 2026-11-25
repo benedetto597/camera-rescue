@@ -137,8 +137,8 @@ public final class OneUiAssistantGuide {
                 STEP_OPEN_PRO,
                 1,
                 "Abrir Samsung Camera en Modo Pro seguro",
-                "Samsung Camera Rescue → Cámara Trasera Pro",
-                "Samsung Camera Rescue → Rear Pro Camera",
+                CameraConfig.APP_SHORT_NAME + " → Cámara Trasera Pro",
+                CameraConfig.APP_SHORT_NAME + " → Rear Pro Camera",
                 instruction.toString(),
                 StepAction.LAUNCH_PRO_MODE,
                 "Abrir Modo Pro"
@@ -197,9 +197,11 @@ public final class OneUiAssistantGuide {
 
     private static AssistantStep buildStepSideKeyDoublePress(ShootingModeMap.OneUiGeneration oneUi) {
         String menuPathEs = buildSideKeyPathEs(oneUi);
-        String menuPathEn = "Settings → Advanced features → Side button → Double press → Open app → Samsung Camera Rescue";
+        String menuPathEn = "Settings → Advanced features → Side button → Double press → Open app → "
+                + CameraConfig.APP_SHORT_NAME;
         String instruction = "Configura la pulsación doble en \"" + oneUi.sideKeyLabel
-                + "\" (Double press → Open app → Samsung Camera Rescue) para abrir la cámara de rescate al instante sin pasar por el modo Foto roto.";
+                + "\" (Double press → Open app → " + CameraConfig.APP_SHORT_NAME
+                + ") para abrir la cámara de rescate al instante sin pasar por el modo Foto roto.";
 
         return new AssistantStep(
                 STEP_SIDE_KEY_DOUBLE_PRESS,
@@ -217,16 +219,20 @@ public final class OneUiAssistantGuide {
         switch (oneUi) {
             case ONE_UI_7:
             case ONE_UI_8_PLUS:
-                return "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → Samsung Camera Rescue";
+                return "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → "
+                        + CameraConfig.APP_SHORT_NAME;
             case ONE_UI_6:
-                return "Ajustes → Funciones avanzadas → Botón lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue";
+                return "Ajustes → Funciones avanzadas → Botón lateral → Pulsar dos veces → Abrir aplicación → "
+                        + CameraConfig.APP_SHORT_NAME;
             case ONE_UI_3:
             case ONE_UI_4:
             case ONE_UI_5:
-                return "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue";
+                return "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → "
+                        + CameraConfig.APP_SHORT_NAME;
             case ONE_UI_2:
             default:
-                return "Ajustes → Funciones avanzadas → Tecla lateral (o Inicio rápido) → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue";
+                return "Ajustes → Funciones avanzadas → Tecla lateral (o Inicio rápido) → Pulsar dos veces → Abrir aplicación → "
+                        + CameraConfig.APP_SHORT_NAME;
         }
     }
 

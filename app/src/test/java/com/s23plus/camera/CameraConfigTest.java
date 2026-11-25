@@ -20,17 +20,35 @@ public final class CameraConfigTest {
     }
 
     private static void testAppBrandingAndShortLabels() {
-        assertEquals("Samsung Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
-        assertEquals("2.0.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 2.0.0");
+        assertEquals("Rescue Cam: Sensor Recovery", CameraConfig.APP_TITLE, "APP_TITLE debe ser marca neutral Play Store");
+        assertTrue(CameraConfig.APP_TITLE.length() <= 30, "APP_TITLE no debe exceder 30 caracteres");
+        assertEquals("Rescue Cam", CameraConfig.APP_SHORT_NAME, "APP_SHORT_NAME debe ser Rescue Cam");
+        assertEquals("2.1.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 2.1.0");
+        assertEquals(7, CameraConfig.APP_VERSION_CODE, "APP_VERSION_CODE debe ser 7");
+        assertEquals("io.github.benedetto597.rescuecam", CameraConfig.PLAY_APPLICATION_ID,
+                "PLAY_APPLICATION_ID debe ser io.github.benedetto597.rescuecam");
+        assertEquals(36, CameraConfig.TARGET_PLAY_SDK, "TARGET_PLAY_SDK debe ser 36");
+        assertEquals("https://benedetto597.github.io/camera-rescue/privacy-policy.html",
+                CameraConfig.PRIVACY_POLICY_URL, "PRIVACY_POLICY_URL incorrecta");
+        assertTrue(CameraConfig.TRADEMARK_DISCLAIMER != null
+                        && CameraConfig.TRADEMARK_DISCLAIMER.contains("Samsung Electronics"),
+                "TRADEMARK_DISCLAIMER debe declarar independencia respecto a Samsung Electronics");
+        assertEquals("Pictures/RescueCam", CameraConfig.MEDIA_RELATIVE_PATH,
+                "MEDIA_RELATIVE_PATH debe ser Pictures/RescueCam");
+        assertEquals("Escáner QR 1x", CameraConfig.BTN_REAR_QR_SHORT,
+                "BTN_REAR_QR_SHORT debe ser Escáner QR 1x");
         assertTrue(CameraConfig.BTN_REAR_PRO_SHORT.length() <= 24, "Nombre corto de boton Pro debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_QR_SHORT.length() <= 26, "Nombre corto de boton QR debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_VIDEO_SHORT.length() <= 24, "Nombre corto de boton Video debe ser conciso");
         assertTrue(CameraConfig.TECH_DESC_REAR_PRO.contains("ID 56") && CameraConfig.TECH_DESC_REAR_PRO.contains("ID 52"),
                 "Descripcion tecnica Pro debe documentar sensores ID 56 e ID 52");
-        assertTrue(CameraConfig.TECH_DESC_REAR_QR.contains("SCAN_QR_CODE"),
-                "Descripcion tecnica QR debe documentar SCAN_QR_CODE");
-        assertTrue(CameraConfig.TECH_DESC_FRONT.contains("S5K3LU"),
-                "Descripcion tecnica Frontal debe documentar sensor S5K3LU");
+        assertTrue(CameraConfig.TECH_DESC_REAR_QR.contains("SCAN_QR_CODE")
+                        && !CameraConfig.TECH_DESC_REAR_QR.contains("RearCaptureService")
+                        && !CameraConfig.TECH_DESC_REAR_QR.contains("HUD flotante"),
+                "Descripcion tecnica QR debe documentar SCAN_QR_CODE sin RearCaptureService ni HUD flotante");
+        assertTrue(CameraConfig.TECH_DESC_FRONT.contains("S5K3LU")
+                        && CameraConfig.TECH_DESC_FRONT.contains("Pictures/RescueCam"),
+                "Descripcion tecnica Frontal debe documentar sensor S5K3LU y Pictures/RescueCam");
     }
 
     private static void testV130ActionConstants() {
@@ -69,8 +87,8 @@ public final class CameraConfigTest {
     }
 
     private static void testV200UniversalViewerAndVideoConstants() {
-        assertEquals("Movies/S23Camera", CameraConfig.VIDEO_RELATIVE_PATH,
-                "VIDEO_RELATIVE_PATH debe ser Movies/S23Camera");
+        assertEquals("Movies/RescueCam", CameraConfig.VIDEO_RELATIVE_PATH,
+                "VIDEO_RELATIVE_PATH debe ser Movies/RescueCam");
         assertEquals("com.s23plus.camera.action.OPEN_INTEGRATED_VIEWER",
                 CameraConfig.ACTION_OPEN_INTEGRATED_VIEWER,
                 "ACTION_OPEN_INTEGRATED_VIEWER incorrecta");
@@ -92,8 +110,8 @@ public final class CameraConfigTest {
                 "TECH_DESC_UNIVERSAL_VIEWER debe documentar estrategias de zoom");
         assertTrue(desc.contains("LENS_APERTURE") && desc.contains("f/1.5") && desc.contains("f/2.4"),
                 "TECH_DESC_UNIVERSAL_VIEWER debe documentar apertura dual S9/S10/Note 9-10");
-        assertTrue(desc.contains("Pictures/S23Camera") && desc.contains("Movies/S23Camera"),
-                "TECH_DESC_UNIVERSAL_VIEWER debe documentar rutas JPEG y MP4");
+        assertTrue(desc.contains("Pictures/RescueCam") && desc.contains("Movies/RescueCam"),
+                "TECH_DESC_UNIVERSAL_VIEWER debe documentar rutas JPEG y MP4 en RescueCam");
     }
 
     private static void testCameraIdsAndConstants() {

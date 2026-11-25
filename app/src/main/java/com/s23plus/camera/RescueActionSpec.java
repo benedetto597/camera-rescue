@@ -8,7 +8,7 @@ public final class RescueActionSpec {
     public enum ActionType {
         FRONT_CAMERA,
         REAR_PRO_PHOTO,
-        REAR_QR_HUD,
+        REAR_QR_DIRECT,
         REAR_PRO_VIDEO
     }
 

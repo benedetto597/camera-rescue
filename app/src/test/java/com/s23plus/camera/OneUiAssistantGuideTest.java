@@ -44,6 +44,10 @@ public final class OneUiAssistantGuideTest {
             assertEquals(OneUiAssistantGuide.STEP_OPEN_PRO, steps.get(0).id, "Paso 1 id");
             assertEquals(1, steps.get(0).stepNumber, "Paso 1 stepNumber");
             assertEquals(OneUiAssistantGuide.StepAction.LAUNCH_PRO_MODE, steps.get(0).action, "Paso 1 action");
+            assertEquals("Rescue Cam → Cámara Trasera Pro", steps.get(0).menuPathEs,
+                    "Paso 1 menuPathEs debe usar APP_SHORT_NAME");
+            assertEquals("Rescue Cam → Rear Pro Camera", steps.get(0).menuPathEn,
+                    "Paso 1 menuPathEn debe usar APP_SHORT_NAME");
 
             assertEquals(OneUiAssistantGuide.STEP_SETTINGS_TO_KEEP, steps.get(1).id, "Paso 2 id");
             assertEquals(2, steps.get(1).stepNumber, "Paso 2 stepNumber");
@@ -67,10 +71,14 @@ public final class OneUiAssistantGuideTest {
             assertEquals(4, steps.get(3).stepNumber, "Paso 4 stepNumber");
             assertEquals(OneUiAssistantGuide.StepAction.OPEN_SIDE_KEY_SETTINGS, steps.get(3).action, "Paso 4 action");
             assertEquals(
-                    "Settings → Advanced features → Side button → Double press → Open app → Samsung Camera Rescue",
+                    "Settings → Advanced features → Side button → Double press → Open app → Rescue Cam",
                     steps.get(3).menuPathEn,
                     "Paso 4 menuPathEn para " + gen.name()
             );
+            assertTrue(steps.get(3).instruction.contains("Rescue Cam"),
+                    "Paso 4 instruction debe mencionar Rescue Cam");
+            assertFalse(steps.get(3).instruction.contains("Samsung Camera Rescue"),
+                    "Paso 4 instruction no debe mencionar Samsung Camera Rescue");
 
             for (OneUiAssistantGuide.AssistantStep step : steps) {
                 assertNonEmpty(step.title, "title no debe ser vacio en " + step.id);
@@ -88,37 +96,37 @@ public final class OneUiAssistantGuideTest {
         }
 
         assertEquals(
-                "Ajustes → Funciones avanzadas → Tecla lateral (o Inicio rápido) → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Tecla lateral (o Inicio rápido) → Pulsar dos veces → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_2).get(3).menuPathEs,
                 "Ruta One UI 2 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_3).get(3).menuPathEs,
                 "Ruta One UI 3 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_4).get(3).menuPathEs,
                 "Ruta One UI 4 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Tecla lateral → Pulsar dos veces → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_5).get(3).menuPathEs,
                 "Ruta One UI 5 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Botón lateral → Pulsar dos veces → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Botón lateral → Pulsar dos veces → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_6).get(3).menuPathEs,
                 "Ruta One UI 6 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_7).get(3).menuPathEs,
                 "Ruta One UI 7 paso 4"
         );
         assertEquals(
-                "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → Samsung Camera Rescue",
+                "Ajustes → Funciones avanzadas → Botón lateral → Pulsación doble → Abrir aplicación → Rescue Cam",
                 OneUiAssistantGuide.buildSteps(s23Plus, ShootingModeMap.OneUiGeneration.ONE_UI_8_PLUS).get(3).menuPathEs,
                 "Ruta One UI 8+ paso 4"
         );

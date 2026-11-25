@@ -13,7 +13,7 @@ public final class CameraConfig {
 
     /** Identidad y versión oficial de la aplicación. */
     public static final String APP_TITLE = "Samsung Camera Rescue";
-    public static final String APP_VERSION = "1.2.0";
+    public static final String APP_VERSION = "1.3.0";
 
     /** Nombres cortos para los botones principales de la interfaz moderna (v1.0.1). */
     public static final String BTN_FRONT_SHUTTER_SHORT = "Tomar Selfie";
@@ -83,6 +83,14 @@ public final class CameraConfig {
 
     /** Directorio relativo en MediaStore donde se almacenan las fotografías tomadas por la app. */
     public static final String MEDIA_RELATIVE_PATH = "Pictures/S23Camera";
+
+    /** Acciones de acceso directo dinámico y deep-link interno para acciones de rescate (v1.3.0). */
+    public static final String ACTION_LAUNCH_REAR_PRO = "com.s23plus.camera.action.LAUNCH_REAR_PRO";
+    public static final String ACTION_LAUNCH_REAR_QR = "com.s23plus.camera.action.LAUNCH_REAR_QR";
+    public static final String ACTION_LAUNCH_REAR_VIDEO = "com.s23plus.camera.action.LAUNCH_REAR_VIDEO";
+    public static final String ACTION_LAUNCH_FRONT = "com.s23plus.camera.action.LAUNCH_FRONT";
+    public static final String EXTRA_SHORTCUT_SENSOR_ID = "extra_shortcut_sensor_id";
+    public static final int MAX_DYNAMIC_SHORTCUTS = 4;
 
     /**
      * Proporciones verificadas en el visor óptico de Samsung S23+ (1080x2340) durante el modo Escáner QR,

@@ -9,16 +9,17 @@ public final class CameraConfigTest {
     public static void main(String[] args) {
         testCameraIdsAndConstants();
         testAppBrandingAndShortLabels();
+        testV130ActionConstants();
         testToggleFrontCameraId();
         testCleanCropBoundsOnS23PlusResolution();
         testFullFrameCropBounds();
         testInvalidDimensionsThrowException();
-        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (6/6).");
+        System.out.println("PASS: Todas las pruebas unitarias de CameraConfigTest finalizaron con exito (7/7).");
     }
 
     private static void testAppBrandingAndShortLabels() {
         assertEquals("Samsung Camera Rescue", CameraConfig.APP_TITLE, "APP_TITLE debe incluir Rescue");
-        assertEquals("1.2.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.2.0");
+        assertEquals("1.3.0", CameraConfig.APP_VERSION, "APP_VERSION debe ser 1.3.0");
         assertTrue(CameraConfig.BTN_REAR_PRO_SHORT.length() <= 24, "Nombre corto de boton Pro debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_QR_SHORT.length() <= 26, "Nombre corto de boton QR debe ser conciso");
         assertTrue(CameraConfig.BTN_REAR_VIDEO_SHORT.length() <= 24, "Nombre corto de boton Video debe ser conciso");
@@ -28,6 +29,21 @@ public final class CameraConfigTest {
                 "Descripcion tecnica QR debe documentar SCAN_QR_CODE");
         assertTrue(CameraConfig.TECH_DESC_FRONT.contains("S5K3LU"),
                 "Descripcion tecnica Frontal debe documentar sensor S5K3LU");
+    }
+
+    private static void testV130ActionConstants() {
+        assertEquals("com.s23plus.camera.action.LAUNCH_REAR_PRO", CameraConfig.ACTION_LAUNCH_REAR_PRO,
+                "ACTION_LAUNCH_REAR_PRO incorrecta");
+        assertEquals("com.s23plus.camera.action.LAUNCH_REAR_QR", CameraConfig.ACTION_LAUNCH_REAR_QR,
+                "ACTION_LAUNCH_REAR_QR incorrecta");
+        assertEquals("com.s23plus.camera.action.LAUNCH_REAR_VIDEO", CameraConfig.ACTION_LAUNCH_REAR_VIDEO,
+                "ACTION_LAUNCH_REAR_VIDEO incorrecta");
+        assertEquals("com.s23plus.camera.action.LAUNCH_FRONT", CameraConfig.ACTION_LAUNCH_FRONT,
+                "ACTION_LAUNCH_FRONT incorrecta");
+        assertEquals("extra_shortcut_sensor_id", CameraConfig.EXTRA_SHORTCUT_SENSOR_ID,
+                "EXTRA_SHORTCUT_SENSOR_ID incorrecto");
+        assertEquals(4, CameraConfig.MAX_DYNAMIC_SHORTCUTS,
+                "MAX_DYNAMIC_SHORTCUTS debe ser 4");
     }
 
     private static void testCameraIdsAndConstants() {

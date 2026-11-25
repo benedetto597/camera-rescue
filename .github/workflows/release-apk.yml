@@ -26,7 +26,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Run Unit Tests (CameraConfigTest & SamsungModelDatabaseTest)
+      - name: Run Unit Tests (4 Pure Java Suites)
         run: |
           mkdir -p build/test-classes
           javac -encoding UTF-8 -d build/test-classes \
@@ -34,10 +34,17 @@ jobs:
             app/src/main/java/com/s23plus/camera/SamsungModelDatabase.java \
             app/src/main/java/com/s23plus/camera/SensorHealth.java \
             app/src/main/java/com/s23plus/camera/DiscoveredSensor.java \
+            app/src/main/java/com/s23plus/camera/RescueActionSpec.java \
+            app/src/main/java/com/s23plus/camera/SensorSelectionState.java \
+            app/src/main/java/com/s23plus/camera/DynamicUiBuilder.java \
             app/src/test/java/com/s23plus/camera/CameraConfigTest.java \
-            app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java
+            app/src/test/java/com/s23plus/camera/SamsungModelDatabaseTest.java \
+            app/src/test/java/com/s23plus/camera/SensorSelectionStateTest.java \
+            app/src/test/java/com/s23plus/camera/DynamicUiBuilderTest.java
           java -cp build/test-classes com.s23plus.camera.CameraConfigTest
           java -cp build/test-classes com.s23plus.camera.SamsungModelDatabaseTest
+          java -cp build/test-classes com.s23plus.camera.SensorSelectionStateTest
+          java -cp build/test-classes com.s23plus.camera.DynamicUiBuilderTest
 
       - name: Build and Sign Release APK
         run: |
@@ -54,8 +61,8 @@ jobs:
             --manifest app/src/main/AndroidManifest.xml \
             --min-sdk-version 30 \
             --target-sdk-version 34 \
-            --version-code 3 \
-            --version-name "1.2.0" \
+            --version-code 4 \
+            --version-name "1.3.0" \
             -o build/apk-ci/unaligned.apk \
             --java build/apk-ci/gen \
             build/apk-ci/compiled_res/res.zip

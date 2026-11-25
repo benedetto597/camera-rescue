@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -18,22 +19,26 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Actividad principal de Samsung Camera Rescue (v1.2.0).
+ * Actividad principal de Samsung Camera Rescue (v1.3.0).
  *
  * Incluye:
  * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase).
- * 2. Escáner de sensores on-device no bloqueante (SensorScanner) con reporte de salud visual.
- * 3. Visor Camera2 en vivo para sensores frontales funcionales (ID 1 e ID 3).
- * 4. Lanzadores directos a Modos Pro ISP y Escáner QR con HUD flotante para sensores traseros independientes (device 56 y 52).
+ * 2. Escáner de sensores on-device (SensorScanner) con selector interactivo de lentes funcionales.
+ * 3. Visor Camera2 en vivo para sensores frontales funcionales adaptativo según selección.
+ * 4. Tarjetas dinámicas de rescate, accesos directos dinámicos/fijables y Quick Settings Tile.
  */
 public final class MainActivity extends Activity implements FrontCameraController.StatusListener {
 
@@ -45,12 +50,21 @@ public final class MainActivity extends Activity implements FrontCameraControlle
     private Button switchLensButton;
     private FrontCameraController frontCameraController;
 
-    // Componentes del motor de diagnóstico v1.2.0
+    // Componentes del motor de diagnóstico y selector dinámico (v1.2.0 - v1.3.0)
     private SamsungModelDatabase.ModelProfile modelProfile;
     private SensorScanner sensorScanner;
     private TextView scanStatusText;
     private LinearLayout scanResultsContainer;
     private Button runScanButton;
+
+    private List<DiscoveredSensor> lastScannedSensors = new ArrayList<>();
+    private Set<String> selectedSensorIds = new LinkedHashSet<>();
+    private List<RescueActionSpec> currentRearSpecs = new ArrayList<>();
+    private List<DiscoveredSensor> activeFrontSensors = new ArrayList<>();
+    private LinearLayout rearCardsContainer;
+    private TextView shortcutsStatusView;
+    private Button quickTileTargetButton;
+    private int lastPublishedShortcutsCount = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +76,49 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         sensorScanner = new SensorScanner(this);
         frontCameraController = new FrontCameraController(this, this);
 
+        Set<String> saved = RescuePreferences.loadSelectedSensorIds(this);
+        if (saved != null) {
+            selectedSensorIds.addAll(saved);
+        }
+
         buildModernUserInterface();
+        rebuildDynamicUiAndShortcuts();
+        handleLaunchIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleLaunchIntent(intent);
+    }
+
+    private void handleLaunchIntent(Intent intent) {
+        if (intent == null || intent.getAction() == null) {
+            return;
+        }
+        String action = intent.getAction();
+        if (CameraConfig.ACTION_LAUNCH_REAR_PRO.equals(action)) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO);
+        } else if (CameraConfig.ACTION_LAUNCH_REAR_QR.equals(action)) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            launchRearQrWithFloatingHud();
+        } else if (CameraConfig.ACTION_LAUNCH_REAR_VIDEO.equals(action)) {
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            launchSamsungRearMode(CameraConfig.MODE_PRO_VIDEO, CameraConfig.ACTIVITY_NAME_PRO_VIDEO);
+        } else if (CameraConfig.ACTION_LAUNCH_FRONT.equals(action)) {
+            String sensorId = intent.getStringExtra(CameraConfig.EXTRA_SHORTCUT_SENSOR_ID);
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            if (sensorId != null && !sensorId.trim().isEmpty()) {
+                String trimmedId = sensorId.trim();
+                frontCameraController.switchToCameraId(trimmedId, frontPreviewView, getDisplayRotationCompat());
+                updateFrontLensLabels(trimmedId);
+                onStatusChanged("Atajo frontal activado (ID " + trimmedId + ")");
+            } else {
+                onStatusChanged("Atajo frontal activado");
+            }
+        }
     }
 
     private void buildModernUserInterface() {
@@ -195,13 +251,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 0, dpToPx(46), 0.85f);
         switchLp.rightMargin = dpToPx(6);
         switchLensButton.setLayoutParams(switchLp);
-        switchLensButton.setOnClickListener(v -> {
-            frontCameraController.switchFrontCamera(frontPreviewView, getDisplayRotationCompat());
-            String activeId = frontCameraController.getCurrentCameraId();
-            boolean isWide = CameraConfig.FRONT_CAMERA_WIDE_ID.equals(activeId);
-            switchLensButton.setText(isWide ? "Lente 8.6 MP" : "Lente 12 MP");
-            lensOverlayBadge.setText(isWide ? "Frontal ID 1 · 12 MP" : "Frontal ID 3 · 8.6 MP");
-        });
+        switchLensButton.setOnClickListener(v -> onSwitchFrontLensClicked());
         frontControlsRow.addView(switchLensButton);
 
         TextView frontTechView = createTechDescriptionView(CameraConfig.TECH_DESC_FRONT);
@@ -225,38 +275,73 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         rearSectionHeader.setLayoutParams(sectionLp);
         root.addView(rearSectionHeader);
 
-        // Tarjeta 1: Cámara Trasera Pro (ISP 50MP/12MP - ID 56 y 52)
-        root.addView(createExpandableRescueCard(
-                CameraConfig.BTN_REAR_PRO_SHORT,
-                "Recomendado · Lentes 1x (50 MP) y 3x Tele · ISP Nativo",
-                "#0284C7",
-                "#38BDF8",
-                CameraConfig.TECH_DESC_REAR_PRO,
-                () -> launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO)
-        ));
+        // Contenedor dinámico de tarjetas traseras (v1.3.0)
+        rearCardsContainer = new LinearLayout(this);
+        rearCardsContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(rearCardsContainer);
 
-        // Tarjeta 2: Trasera Rápida (QR + Botón Obturador Flotante - ID 56)
-        root.addView(createExpandableRescueCard(
-                CameraConfig.BTN_REAR_QR_SHORT,
-                "Obturador Flotante Rescue · Lente 1x Principal",
-                "#4F46E5",
-                "#818CF8",
-                CameraConfig.TECH_DESC_REAR_QR,
-                this::launchRearQrWithFloatingHud
-        ));
-
-        // Tarjeta 3: Video Trasero Pro (ID 56 y 52)
-        root.addView(createExpandableRescueCard(
-                CameraConfig.BTN_REAR_VIDEO_SHORT,
-                "Grabación 1x y 3x con Estabilización y Audio",
-                "#1E293B",
-                "#94A3B8",
-                CameraConfig.TECH_DESC_REAR_VIDEO,
-                () -> launchSamsungRearMode(CameraConfig.MODE_PRO_VIDEO, CameraConfig.ACTIVITY_NAME_PRO_VIDEO)
-        ));
+        // 5. Tarjeta de Atajos Dinámicos y Quick Settings Tile (v1.3.0)
+        root.addView(buildShortcutsAndTileCard());
 
         rootScroll.addView(root);
         setContentView(rootScroll);
+    }
+
+    /**
+     * Construye la tarjeta para fijar accesos directos y elegir el objetivo del Quick Settings Tile.
+     */
+    private LinearLayout buildShortcutsAndTileCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        card.setPadding(pad, pad, pad, pad);
+        card.setBackground(createRoundedDrawable("#111827", "#1F2937", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.topMargin = dpToPx(6);
+        card.setLayoutParams(cardLp);
+
+        TextView header = new TextView(this);
+        header.setText("ATAJOS Y ACCESO RÁPIDO (v1.3.0)");
+        header.setTextColor(Color.parseColor("#38BDF8"));
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        card.addView(header);
+
+        shortcutsStatusView = new TextView(this);
+        shortcutsStatusView.setTextColor(Color.parseColor("#94A3B8"));
+        shortcutsStatusView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusLp.topMargin = dpToPx(4);
+        statusLp.bottomMargin = dpToPx(10);
+        shortcutsStatusView.setLayoutParams(statusLp);
+        card.addView(shortcutsStatusView);
+
+        LinearLayout actionsRow = new LinearLayout(this);
+        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionsRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button pinShortcutButton = createShortButton("＋ Fijar Atajo", "#0284C7", "#FFFFFF", true);
+        LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(0, dpToPx(46), 1.0f);
+        pinLp.rightMargin = dpToPx(8);
+        pinShortcutButton.setLayoutParams(pinLp);
+        pinShortcutButton.setOnClickListener(v -> onPinShortcutClicked());
+        actionsRow.addView(pinShortcutButton);
+
+        quickTileTargetButton = createShortButton(
+                "Tile: " + RescuePreferences.loadQuickTileLabel(this),
+                "#1E293B",
+                "#7DD3FC",
+                false
+        );
+        LinearLayout.LayoutParams tileLp = new LinearLayout.LayoutParams(0, dpToPx(46), 1.0f);
+        quickTileTargetButton.setLayoutParams(tileLp);
+        quickTileTargetButton.setOnClickListener(v -> cycleQuickTileTarget());
+        actionsRow.addView(quickTileTargetButton);
+
+        card.addView(actionsRow);
+        return card;
     }
 
     /**
@@ -361,7 +446,7 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             @Override
             public void onSensorTested(int index, int total, DiscoveredSensor sensor) {
                 scanStatusText.setText("Probando sensor " + index + " de " + total + " (" + sensor.name + ")...");
-                addSensorResultRow(sensor);
+                scanResultsContainer.addView(buildSensorRow(sensor, false));
             }
 
             @Override
@@ -371,6 +456,14 @@ public final class MainActivity extends Activity implements FrontCameraControlle
                 String summary = "Escaneo completado: " + healthyCount + " lentes funcionales, " + damagedCount + " con avería.";
                 scanStatusText.setText(summary);
                 scanStatusText.setTextColor(damagedCount > 0 ? Color.parseColor("#FBBF24") : Color.parseColor("#34D399"));
+
+                lastScannedSensors = results != null ? new ArrayList<>(results) : new ArrayList<>();
+                Set<String> saved = RescuePreferences.loadSelectedSensorIds(MainActivity.this);
+                selectedSensorIds = SensorSelectionState.sanitizeSelection(saved, lastScannedSensors);
+                RescuePreferences.saveSelectedSensorIds(MainActivity.this, selectedSensorIds);
+
+                renderScanChecklist();
+                rebuildDynamicUiAndShortcuts();
                 Toast.makeText(MainActivity.this, summary, Toast.LENGTH_SHORT).show();
             }
 
@@ -384,7 +477,15 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         });
     }
 
-    private void addSensorResultRow(DiscoveredSensor sensor) {
+    private void renderScanChecklist() {
+        scanResultsContainer.removeAllViews();
+        scanResultsContainer.setVisibility(lastScannedSensors.isEmpty() ? View.GONE : View.VISIBLE);
+        for (DiscoveredSensor sensor : lastScannedSensors) {
+            scanResultsContainer.addView(buildSensorRow(sensor, true));
+        }
+    }
+
+    private LinearLayout buildSensorRow(DiscoveredSensor sensor, boolean interactiveChecklist) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
         int pad = dpToPx(8);
@@ -398,6 +499,34 @@ public final class MainActivity extends Activity implements FrontCameraControlle
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
+
+        if (interactiveChecklist) {
+            boolean selectable = SensorSelectionState.isSelectable(sensor);
+            CheckBox checkBox = new CheckBox(this);
+            checkBox.setButtonTintList(ColorStateList.valueOf(
+                    Color.parseColor(selectable ? "#38BDF8" : "#475569")));
+            checkBox.setEnabled(selectable);
+            checkBox.setChecked(selectable && selectedSensorIds.contains(sensor.id));
+            LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cbLp.rightMargin = dpToPx(6);
+            checkBox.setLayoutParams(cbLp);
+
+            if (!selectable) {
+                row.setAlpha(0.55f);
+            } else {
+                checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                    if (isChecked) {
+                        selectedSensorIds.add(sensor.id);
+                    } else {
+                        selectedSensorIds.remove(sensor.id);
+                    }
+                    RescuePreferences.saveSelectedSensorIds(MainActivity.this, selectedSensorIds);
+                    rebuildDynamicUiAndShortcuts();
+                });
+            }
+            header.addView(checkBox);
+        }
 
         TextView nameView = new TextView(this);
         nameView.setText(sensor.name + " (ID " + sensor.id + ")");
@@ -441,7 +570,257 @@ public final class MainActivity extends Activity implements FrontCameraControlle
             row.addView(detail);
         }
 
-        scanResultsContainer.addView(row);
+        return row;
+    }
+
+    private void rebuildDynamicUiAndShortcuts() {
+        currentRearSpecs = DynamicUiBuilder.buildRearActionSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
+        if (rearCardsContainer != null) {
+            rearCardsContainer.removeAllViews();
+            if (currentRearSpecs.isEmpty()) {
+                rearCardsContainer.addView(buildNoRearSensorsCard());
+            } else {
+                for (RescueActionSpec spec : currentRearSpecs) {
+                    rearCardsContainer.addView(createExpandableRescueCard(
+                            spec.title,
+                            spec.subtitle,
+                            spec.primaryColorHex,
+                            spec.accentColorHex,
+                            spec.technicalDescription,
+                            () -> executeRescueSpec(spec)
+                    ));
+                }
+            }
+        }
+
+        updateFrontControlsAfterSelection();
+
+        List<RescueActionSpec> shortcutSpecs =
+                DynamicUiBuilder.buildShortcutSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
+        lastPublishedShortcutsCount = RescueShortcutManager.updateDynamicShortcuts(this, shortcutSpecs);
+
+        if (!shortcutSpecs.isEmpty()) {
+            String savedTileAction = RescuePreferences.loadQuickTileAction(this);
+            boolean actionStillActive = false;
+            for (RescueActionSpec spec : shortcutSpecs) {
+                if (spec.intentAction.equals(savedTileAction)) {
+                    actionStillActive = true;
+                    break;
+                }
+            }
+            if (!actionStillActive) {
+                RescueActionSpec fallback = shortcutSpecs.get(0);
+                RescuePreferences.saveQuickTileAction(this, fallback.intentAction, resolveShortcutLabel(fallback));
+            }
+        }
+        refreshShortcutsStatusViews();
+    }
+
+    private LinearLayout buildNoRearSensorsCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        card.setPadding(pad, pad, pad, pad);
+        card.setBackground(createRoundedDrawable("#111827", "#F59E0B", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dpToPx(10);
+        card.setLayoutParams(cardLp);
+
+        TextView title = new TextView(this);
+        title.setText("Sin lentes traseros seleccionados");
+        title.setTextColor(Color.parseColor("#FBBF24"));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        card.addView(title);
+
+        TextView explanation = new TextView(this);
+        explanation.setText("Marca al menos un sensor trasero funcional en el diagnóstico superior para habilitar las tarjetas traseras, o usa el visor frontal Camera2.");
+        explanation.setTextColor(Color.parseColor("#CBD5E1"));
+        explanation.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        explanation.setPadding(0, dpToPx(6), 0, 0);
+        card.addView(explanation);
+
+        return card;
+    }
+
+    private void executeRescueSpec(RescueActionSpec spec) {
+        if (spec == null) {
+            return;
+        }
+        switch (spec.actionType) {
+            case REAR_PRO_PHOTO:
+                launchSamsungRearMode(CameraConfig.MODE_PRO_PHOTO, CameraConfig.ACTIVITY_NAME_PRO_PHOTO);
+                break;
+            case REAR_QR_HUD:
+                launchRearQrWithFloatingHud();
+                break;
+            case REAR_PRO_VIDEO:
+                launchSamsungRearMode(CameraConfig.MODE_PRO_VIDEO, CameraConfig.ACTIVITY_NAME_PRO_VIDEO);
+                break;
+            case FRONT_CAMERA:
+                if (spec.sensorId != null && !spec.sensorId.trim().isEmpty()) {
+                    frontCameraController.switchToCameraId(spec.sensorId.trim(), frontPreviewView, getDisplayRotationCompat());
+                    updateFrontLensLabels(spec.sensorId.trim());
+                }
+                break;
+        }
+    }
+
+    private void updateFrontControlsAfterSelection() {
+        if (lastScannedSensors.isEmpty() || switchLensButton == null || lensOverlayBadge == null) {
+            return;
+        }
+        activeFrontSensors = DynamicUiBuilder.getSelectableFrontSensors(lastScannedSensors, selectedSensorIds);
+        if (activeFrontSensors.isEmpty()) {
+            switchLensButton.setEnabled(false);
+            switchLensButton.setAlpha(0.55f);
+            switchLensButton.setText("Sin frontal activa");
+            lensOverlayBadge.setText("Frontal desactivada en checklist");
+            return;
+        }
+
+        String currentId = frontCameraController.getCurrentCameraId();
+        if (findSensorIndexById(activeFrontSensors, currentId) < 0) {
+            String targetId = activeFrontSensors.get(0).id;
+            if (frontPreviewView != null && frontPreviewView.isAvailable()) {
+                frontCameraController.switchToCameraId(targetId, frontPreviewView, getDisplayRotationCompat());
+            } else {
+                frontCameraController.setCurrentCameraId(targetId);
+            }
+            currentId = targetId;
+        }
+        updateFrontLensLabels(currentId);
+    }
+
+    private void onSwitchFrontLensClicked() {
+        if (!activeFrontSensors.isEmpty()) {
+            if (activeFrontSensors.size() < 2) {
+                return;
+            }
+            int idx = findSensorIndexById(activeFrontSensors, frontCameraController.getCurrentCameraId());
+            DiscoveredSensor next = activeFrontSensors.get((idx + 1) % activeFrontSensors.size());
+            frontCameraController.switchToCameraId(next.id, frontPreviewView, getDisplayRotationCompat());
+            updateFrontLensLabels(next.id);
+            return;
+        }
+        frontCameraController.switchFrontCamera(frontPreviewView, getDisplayRotationCompat());
+        updateFrontLensLabels(frontCameraController.getCurrentCameraId());
+    }
+
+    private void updateFrontLensLabels(String activeId) {
+        if (switchLensButton == null || lensOverlayBadge == null) {
+            return;
+        }
+        if (!activeFrontSensors.isEmpty()) {
+            if (activeFrontSensors.size() == 1) {
+                DiscoveredSensor only = activeFrontSensors.get(0);
+                switchLensButton.setEnabled(false);
+                switchLensButton.setAlpha(0.65f);
+                switchLensButton.setText("1 lente frontal");
+                lensOverlayBadge.setText("Frontal ID " + only.id + " · " + only.getResolutionMegaPixels());
+                return;
+            }
+            int idx = findSensorIndexById(activeFrontSensors, activeId);
+            if (idx < 0) {
+                idx = 0;
+            }
+            DiscoveredSensor current = activeFrontSensors.get(idx);
+            DiscoveredSensor next = activeFrontSensors.get((idx + 1) % activeFrontSensors.size());
+            switchLensButton.setEnabled(true);
+            switchLensButton.setAlpha(1.0f);
+            String nextMp = next.getResolutionMegaPixels();
+            switchLensButton.setText("N/D".equals(nextMp) ? "Lente ID " + next.id : "Lente " + nextMp);
+            lensOverlayBadge.setText("Frontal ID " + current.id + " · " + current.getResolutionMegaPixels());
+            return;
+        }
+
+        switchLensButton.setEnabled(true);
+        switchLensButton.setAlpha(1.0f);
+        if (CameraConfig.FRONT_CAMERA_WIDE_ID.equals(activeId)) {
+            switchLensButton.setText("Lente 8.6 MP");
+            lensOverlayBadge.setText("Frontal ID 1 · 12 MP");
+        } else if (CameraConfig.FRONT_CAMERA_NORMAL_ID.equals(activeId)) {
+            switchLensButton.setText("Lente 12 MP");
+            lensOverlayBadge.setText("Frontal ID 3 · 8.6 MP");
+        } else {
+            switchLensButton.setText("Cambiar Lente");
+            lensOverlayBadge.setText("Frontal ID " + activeId);
+        }
+    }
+
+    private void onPinShortcutClicked() {
+        RescueActionSpec targetSpec = null;
+        if (!currentRearSpecs.isEmpty()) {
+            targetSpec = currentRearSpecs.get(0);
+        } else {
+            List<RescueActionSpec> shortcutSpecs =
+                    DynamicUiBuilder.buildShortcutSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
+            if (!shortcutSpecs.isEmpty()) {
+                targetSpec = shortcutSpecs.get(0);
+            }
+        }
+        if (targetSpec == null) {
+            Toast.makeText(this, "Activa al menos un sensor para fijar un atajo", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boolean sent = RescueShortcutManager.requestPinShortcut(this, targetSpec);
+        Toast.makeText(
+                this,
+                sent ? "Solicitud enviada al launcher" : "El launcher no soporta atajos fijados",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private void cycleQuickTileTarget() {
+        List<RescueActionSpec> available =
+                DynamicUiBuilder.buildShortcutSpecs(modelProfile, lastScannedSensors, selectedSensorIds);
+        if (available.isEmpty()) {
+            Toast.makeText(this, "Activa al menos un sensor para configurar el Tile Rápido", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String currentAction = RescuePreferences.loadQuickTileAction(this);
+        int currentIndex = -1;
+        for (int i = 0; i < available.size(); i++) {
+            if (available.get(i).intentAction.equals(currentAction)) {
+                currentIndex = i;
+                break;
+            }
+        }
+        RescueActionSpec next = available.get((currentIndex + 1) % available.size());
+        String nextLabel = resolveShortcutLabel(next);
+        RescuePreferences.saveQuickTileAction(this, next.intentAction, nextLabel);
+        refreshShortcutsStatusViews();
+        Toast.makeText(this, "Tile Rápido actualizado a: " + nextLabel, Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshShortcutsStatusViews() {
+        String tileLabel = RescuePreferences.loadQuickTileLabel(this);
+        if (quickTileTargetButton != null) {
+            quickTileTargetButton.setText("Tile: " + tileLabel);
+        }
+        if (shortcutsStatusView != null) {
+            shortcutsStatusView.setText(lastPublishedShortcutsCount + " atajos en Launcher · Tile Rápido: " + tileLabel);
+        }
+    }
+
+    private static int findSensorIndexById(List<DiscoveredSensor> sensors, String id) {
+        if (sensors == null || id == null) {
+            return -1;
+        }
+        for (int i = 0; i < sensors.size(); i++) {
+            if (id.equals(sensors.get(i).id)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String resolveShortcutLabel(RescueActionSpec spec) {
+        if (spec.shortcutShortLabel != null && !spec.shortcutShortLabel.trim().isEmpty()) {
+            return spec.shortcutShortLabel.trim();
+        }
+        return spec.title;
     }
 
     private LinearLayout createExpandableRescueCard(

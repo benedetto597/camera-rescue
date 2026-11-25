@@ -66,9 +66,21 @@ public final class FrontCameraController {
         return currentCameraId;
     }
 
-    public void setCurrentCameraId(String cameraId) {
-        if (CameraConfig.FRONT_CAMERA_WIDE_ID.equals(cameraId) || CameraConfig.FRONT_CAMERA_NORMAL_ID.equals(cameraId)) {
-            this.currentCameraId = cameraId;
+    public synchronized void setCurrentCameraId(String cameraId) {
+        if (cameraId != null && !cameraId.trim().isEmpty()) {
+            this.currentCameraId = cameraId.trim();
+        }
+    }
+
+    public synchronized void switchToCameraId(String cameraId, TextureView textureView, int displayRotation) {
+        if (cameraId == null || cameraId.trim().isEmpty()) {
+            return;
+        }
+        this.currentCameraId = cameraId.trim();
+        closeCameraOnly();
+        if (textureView != null && textureView.isAvailable()) {
+            startBackgroundThread();
+            openCameraInternal(textureView.getSurfaceTexture(), displayRotation);
         }
     }
 
@@ -199,9 +211,14 @@ public final class FrontCameraController {
                                 captureSession = session;
                                 try {
                                     session.setRepeatingRequest(previewBuilder.build(), null, backgroundHandler);
-                                    String label = CameraConfig.FRONT_CAMERA_WIDE_ID.equals(currentCameraId)
-                                            ? "Frontal ID 1 (12 MP Gran Angular)"
-                                            : "Frontal ID 3 (8.6 MP Normal)";
+                                    String label;
+                                    if (CameraConfig.FRONT_CAMERA_WIDE_ID.equals(currentCameraId)) {
+                                        label = "Frontal ID 1 (12 MP Gran Angular)";
+                                    } else if (CameraConfig.FRONT_CAMERA_NORMAL_ID.equals(currentCameraId)) {
+                                        label = "Frontal ID 3 (8.6 MP Normal)";
+                                    } else {
+                                        label = "Frontal ID " + currentCameraId;
+                                    }
                                     notifyStatus("Activa: " + label + " [" + jpegSize.getWidth() + "x" + jpegSize.getHeight() + "]");
                                 } catch (CameraAccessException e) {
                                     notifyError("Error al iniciar vista previa: " + e.getMessage());

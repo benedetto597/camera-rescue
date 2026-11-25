@@ -36,8 +36,8 @@ Write-Host "[2/6] Compilando recursos Android con aapt2..."
     --manifest (Join-Path $ProjectRoot "app\src\main\AndroidManifest.xml") `
     --min-sdk-version 30 `
     --target-sdk-version 34 `
-    --version-code 3 `
-    --version-name "1.2.0" `
+    --version-code 4 `
+    --version-name "1.3.0" `
     -o "$BuildDir\unaligned.apk" `
     --java "$BuildDir\gen" `
     "$BuildDir\compiled_res\res.zip"
@@ -68,7 +68,7 @@ if (-not (Test-Path $Keystore)) {
     & $Keytool -genkeypair -v -keystore $Keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" | Out-Null
 }
 
-$FinalApk = Join-Path $DistDir "camera-rescue-v1.2.0.apk"
+$FinalApk = Join-Path $DistDir "camera-rescue-v1.3.0.apk"
 & $Java -jar $ApkSignerJar sign --ks $Keystore --ks-pass pass:android --key-pass pass:android --out $FinalApk "$BuildDir\aligned.apk"
 
 Write-Host "EXITO: APK generado y firmado en $FinalApk"

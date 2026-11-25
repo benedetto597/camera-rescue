@@ -16,6 +16,7 @@ import android.util.Size;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -77,11 +78,24 @@ public final class SensorScanner {
             String[] publicCameraIds = cameraManager.getCameraIdList();
             int total = (publicCameraIds != null ? publicCameraIds.length : 0);
 
-            // Añadir sensores independientes HAL del perfil si existen
-            Set<String> standaloneIds = new HashSet<>();
+            Set<String> publicIdSet = new HashSet<>();
+            if (publicCameraIds != null) {
+                for (String camId : publicCameraIds) {
+                    if (camId != null) {
+                        publicIdSet.add(camId);
+                    }
+                }
+            }
+
+            // Añadir sensores independientes HAL del perfil si existen y no están duplicados en IDs públicos
+            Set<String> standaloneIds = new LinkedHashSet<>();
             if (profile != null) {
-                if (profile.rearMainStandaloneId != null) standaloneIds.add(profile.rearMainStandaloneId);
-                if (profile.rearTeleStandaloneId != null) standaloneIds.add(profile.rearTeleStandaloneId);
+                if (profile.rearMainStandaloneId != null && !publicIdSet.contains(profile.rearMainStandaloneId)) {
+                    standaloneIds.add(profile.rearMainStandaloneId);
+                }
+                if (profile.rearTeleStandaloneId != null && !publicIdSet.contains(profile.rearTeleStandaloneId)) {
+                    standaloneIds.add(profile.rearTeleStandaloneId);
+                }
             }
 
             int estimatedTotal = total + standaloneIds.size();
@@ -161,7 +175,7 @@ public final class SensorScanner {
             CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
             Integer facingVal = characteristics.get(CameraCharacteristics.LENS_FACING);
             if (facingVal != null) {
-                facing = facingVal;
+                facing = (facingVal == CameraCharacteristics.LENS_FACING_FRONT) ? 1 : 0;
             }
 
             float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);

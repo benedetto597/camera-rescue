@@ -13,7 +13,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.Surface;
@@ -41,7 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Actividad principal de Samsung Camera Rescue (v2.0.0).
+ * Actividad principal de Rescue Cam: Sensor Recovery (v2.1.0).
  *
  * Incluye:
  * 1. Motor de diagnóstico heurístico de modelos Samsung (SamsungModelDatabase) y detección de One UI.
@@ -49,7 +48,8 @@ import java.util.Set;
  * 3. Visor Camera2 universal integrado (frontal + trasera pública) con zoom, EV, flash/linterna,
  *    apertura variable LENS_APERTURE, cuadrícula, temporizador y grabación MP4 transaccional.
  * 4. Tarjetas dinámicas de rescate vía ShootingModeMap, recuperación rápida de bloqueos,
- *    asistente colapsable One UI, accesos directos, Quick Settings Tile y perfiles .json vía SAF.
+ *    asistente colapsable One UI, accesos directos, Quick Settings Tile, perfiles .json vía SAF
+ *    y tarjeta offline de privacidad, permisos y aviso legal.
  */
 public final class MainActivity extends Activity implements UniversalCameraController.Listener {
 
@@ -191,7 +191,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
             launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_PHOTO);
         } else if (CameraConfig.ACTION_LAUNCH_REAR_QR.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
-            launchRearQrWithFloatingHud();
+            launchRearQrIsolated();
         } else if (CameraConfig.ACTION_LAUNCH_REAR_VIDEO.equals(action)) {
             setIntent(new Intent(Intent.ACTION_MAIN));
             launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_VIDEO);
@@ -227,10 +227,12 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         rootScroll.setFillViewport(true);
         rootScroll.setBackgroundColor(Color.parseColor("#070B12"));
 
-        LinearLayout root = new LinearLayout(this);
+        final LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        int padH = dpToPx(16);
-        root.setPadding(padH, dpToPx(14), padH, dpToPx(20));
+        final int padH = dpToPx(16);
+        final int baseTop = dpToPx(14);
+        final int baseBottom = dpToPx(20);
+        root.setPadding(padH, baseTop, padH, baseBottom);
 
         // 1. Encabezado Moderno con Insignia de Versión
         LinearLayout headerRow = new LinearLayout(this);
@@ -318,8 +320,25 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         // 8. Tarjeta de Perfil Offline (.json · SAF) (v2.0.0)
         root.addView(buildOfflineProfileCard());
 
+        // 9. Tarjeta de Privacidad, Seguridad de Datos y Aviso Legal (v2.1.0)
+        root.addView(buildPrivacyAndComplianceCard());
+
         rootScroll.addView(root);
+        rootScroll.setOnApplyWindowInsetsListener((v, insets) -> {
+            android.graphics.Insets bars = insets.getInsets(
+                    android.view.WindowInsets.Type.systemBars()
+                            | android.view.WindowInsets.Type.displayCutout()
+            );
+            root.setPadding(
+                    padH + bars.left,
+                    baseTop + bars.top,
+                    padH + bars.right,
+                    baseBottom + bars.bottom
+            );
+            return insets;
+        });
         setContentView(rootScroll);
+        rootScroll.requestApplyInsets();
     }
 
     /**
@@ -1006,6 +1025,100 @@ public final class MainActivity extends Activity implements UniversalCameraContr
     }
 
     /**
+     * Construye la tarjeta informativa offline de privacidad, permisos mínimos,
+     * Seguridad de Datos (Data Safety) y aviso legal de independencia (v2.1.0).
+     */
+    private LinearLayout buildPrivacyAndComplianceCard() {
+        final PlayStoreCompliancePolicy.DataSafetySummary summary =
+                PlayStoreCompliancePolicy.buildOfflineDataSafetySummary();
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(12);
+        card.setPadding(pad, pad, pad, pad);
+        card.setBackground(createRoundedDrawable("#111827", "#1F2937", 18, 1));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.topMargin = dpToPx(10);
+        card.setLayoutParams(cardLp);
+
+        TextView header = new TextView(this);
+        header.setText("PRIVACIDAD, PERMISOS Y AVISO LEGAL");
+        header.setTextColor(Color.parseColor("#38BDF8"));
+        header.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        header.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        card.addView(header);
+
+        TextView summaryView = new TextView(this);
+        summaryView.setText(
+                "100% offline · Cero recopilación ni envío de datos · Sin permiso INTERNET ni Accesibilidad.\n"
+                        + "Permisos: " + summary.permissionsSummary + ".\n"
+                        + "Almacenamiento local: " + summary.localMediaPaths + "."
+        );
+        summaryView.setTextColor(Color.parseColor("#CBD5E1"));
+        summaryView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        summaryView.setLineSpacing(dpToPx(2), 1.0f);
+        LinearLayout.LayoutParams summaryLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        summaryLp.topMargin = dpToPx(6);
+        summaryView.setLayoutParams(summaryLp);
+        card.addView(summaryView);
+
+        TextView disclaimerView = new TextView(this);
+        disclaimerView.setText(summary.trademarkDisclaimer);
+        disclaimerView.setTextColor(Color.parseColor("#94A3B8"));
+        disclaimerView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        disclaimerView.setLineSpacing(dpToPx(2), 1.0f);
+        LinearLayout.LayoutParams disclaimerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        disclaimerLp.topMargin = dpToPx(6);
+        disclaimerLp.bottomMargin = dpToPx(10);
+        disclaimerView.setLayoutParams(disclaimerLp);
+        card.addView(disclaimerView);
+
+        Button detailsButton = createShortButton(
+                "📄 Ver Política de Privacidad y Seguridad de Datos",
+                "#0F172A",
+                "#38BDF8",
+                true
+        );
+        detailsButton.setBackground(createRoundedDrawable("#0F172A", "#1E3A5F", 13, 1));
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(44));
+        detailsButton.setLayoutParams(btnLp);
+        detailsButton.setOnClickListener(v -> showPrivacyAndDataSafetyDialog(summary));
+        card.addView(detailsButton);
+
+        return card;
+    }
+
+    private void showPrivacyAndDataSafetyDialog(PlayStoreCompliancePolicy.DataSafetySummary summary) {
+        String message =
+                "Seguridad de Datos (Data Safety):\n"
+                        + "• Recopilación de datos: " + (summary.collectsUserData ? "Sí" : "No recopila datos") + "\n"
+                        + "• Compartición con terceros: " + (summary.sharesDataWithThirdParties ? "Sí" : "No comparte datos con terceros") + "\n"
+                        + "• Acceso a red (INTERNET): " + (summary.usesInternetPermission ? "Activo" : "Sin permiso INTERNET (100% offline)") + "\n"
+                        + "• AccessibilityService: " + (summary.usesAccessibilityApi ? "Activo" : "No utilizado") + "\n\n"
+                        + "Permisos declarados:\n"
+                        + "• CAMERA (visor Camera2 universal y diagnóstico de sensores)\n"
+                        + "• RECORD_AUDIO opcional (solo si activas audio al grabar MP4)\n"
+                        + "• BIND_QUICK_SETTINGS_TILE (mosaico de Ajustes Rápidos)\n\n"
+                        + "Rutas locales controladas por el usuario:\n"
+                        + "• Fotos y videos en MediaStore: Pictures/RescueCam y Movies/RescueCam\n"
+                        + "• Perfiles de diagnóstico .json: exportación/importación manual vía SAF\n\n"
+                        + "URL de Política de Privacidad:\n"
+                        + summary.privacyPolicyUrl + "\n\n"
+                        + "Aviso legal:\n"
+                        + summary.trademarkDisclaimer;
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Política de Privacidad y Seguridad de Datos")
+                .setMessage(message)
+                .setPositiveButton("Cerrar", null)
+                .show();
+    }
+
+    /**
      * Construye la tarjeta interactiva de diagnóstico de sensores (v1.2.0).
      */
     private LinearLayout buildDiagnosticCard() {
@@ -1055,7 +1168,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
 
         // Botón de ejecución de escaneo
         runScanButton = createShortButton(
-                "🔍 Escanear Sensores de este Galaxy",
+                "🔍 Escanear Sensores de Cámara",
                 "#0284C7",
                 "#FFFFFF",
                 true
@@ -1314,8 +1427,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
             case REAR_PRO_PHOTO:
                 launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_PHOTO);
                 break;
-            case REAR_QR_HUD:
-                launchRearQrWithFloatingHud();
+            case REAR_QR_DIRECT:
+                launchRearQrIsolated();
                 break;
             case REAR_PRO_VIDEO:
                 launchRearModeViaMap(ShootingModeMap.ModeKind.PRO_VIDEO);
@@ -2233,28 +2346,12 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         }
     }
 
-    private void launchRearQrWithFloatingHud() {
-        RearCaptureService service = RearCaptureService.getInstance();
-        if (service == null) {
-            Toast.makeText(
-                    this,
-                    "Activa 'Samsung Camera Rescue — Obturador Trasero' en Accesibilidad para usar el botón flotante.",
-                    Toast.LENGTH_LONG
-            ).show();
-            try {
-                Intent settingsIntent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-                startActivity(settingsIntent);
-            } catch (RuntimeException ignored) {
-            }
-            return;
-        }
-
+    private void launchRearQrIsolated() {
         cancelCountdown(false);
         pendingVideoRecordAudioMode = null;
         currentCameraOpenedSuccessfully = false;
         universalCameraController.closeCameraOnly();
         updateRecordingUi(false, 0L, null);
-        service.showHud();
 
         ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(
                 modelProfile, oneUiGeneration, ShootingModeMap.ModeKind.QR_SCANNER);
@@ -2264,8 +2361,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         ShootingModeMap.LaunchVariant launched = OneUiSystemBridge.launchModeWithFallback(this, descriptor);
         if (launched == null) {
             lastRearLaunchTimestampMs = 0L;
-            service.hideHud();
-            onError("No se pudo iniciar SCAN_QR_CODE de Samsung Camera.");
+            onError("No se pudo iniciar el escáner QR en el sensor 1x.");
         }
     }
 
@@ -2284,10 +2380,6 @@ public final class MainActivity extends Activity implements UniversalCameraContr
             currentCameraOpenedSuccessfully = false;
             universalCameraController.stop();
             updateRecordingUi(false, 0L, null);
-            RearCaptureService service = RearCaptureService.getInstance();
-            if (service != null) {
-                service.hideHud();
-            }
         }
 
         if (plan.action == CameraRecoveryEngine.RecoveryAction.OPEN_CAMERA_APP_INFO) {
@@ -2373,10 +2465,6 @@ public final class MainActivity extends Activity implements UniversalCameraContr
     @Override
     protected void onResume() {
         super.onResume();
-        RearCaptureService service = RearCaptureService.getInstance();
-        if (service != null) {
-            service.hideHud();
-        }
         boolean lockupDetected = false;
         if (lastRearLaunchTimestampMs > 0L) {
             long launchTs = lastRearLaunchTimestampMs;

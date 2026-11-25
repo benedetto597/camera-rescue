@@ -124,7 +124,7 @@ public final class RescueShortcutManager {
         switch (actionType) {
             case REAR_PRO_PHOTO:
                 return R.drawable.ic_shortcut_pro;
-            case REAR_QR_HUD:
+            case REAR_QR_DIRECT:
                 return R.drawable.ic_shortcut_qr;
             case REAR_PRO_VIDEO:
                 return R.drawable.ic_shortcut_video;

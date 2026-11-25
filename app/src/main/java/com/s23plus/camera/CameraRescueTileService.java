@@ -12,7 +12,7 @@ import android.service.quicksettings.TileService;
  */
 public final class CameraRescueTileService extends TileService {
 
-    private static final String TILE_LABEL = "Rescate Cámara";
+    private static final String TILE_LABEL = "Rescue Cam";
 
     @Override
     public void onStartListening() {

@@ -16,8 +16,9 @@ import java.util.Date;
 import java.util.Locale;
 
 /**
- * Guardado transaccional de fotografías JPEG en el almacenamiento compartido de Android (MediaStore).
- * Todas las imágenes se almacenan en {@link CameraConfig#MEDIA_RELATIVE_PATH} ("Pictures/S23Camera")
+ * Guardado transaccional de fotografías JPEG y videos MP4 en el almacenamiento compartido de Android (MediaStore).
+ * Las imágenes se almacenan en {@link CameraConfig#MEDIA_RELATIVE_PATH} ("Pictures/RescueCam")
+ * y los videos en {@link CameraConfig#VIDEO_RELATIVE_PATH} ("Movies/RescueCam")
  * utilizando el flag atómico IS_PENDING para evitar archivos corruptos o incompletos en la galería.
  */
 public final class MediaStoreSaver {
@@ -208,7 +209,7 @@ public final class MediaStoreSaver {
     }
 
     private static String buildFileName(String prefix) {
-        String safePrefix = (prefix == null || prefix.isEmpty()) ? "S23" : prefix;
+        String safePrefix = (prefix == null || prefix.isEmpty()) ? "RC" : prefix;
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(new Date());
         return safePrefix + "_" + timestamp + ".jpg";
     }

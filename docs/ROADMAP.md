@@ -1,6 +1,6 @@
 # Hoja de Ruta y Especificación Técnica — Samsung Camera Rescue
 
-Este documento define la planificación técnica, límites de compatibilidad de hardware, requisitos de permisos y alcance funcional para las próximas versiones de **Samsung Camera Rescue** (actualmente implementada en su versión estable `v1.0.1` para el Samsung Galaxy S23+).
+Este documento define la planificación técnica, límites de compatibilidad de hardware, requisitos de permisos y alcance funcional para las versiones de **Camera Rescue** (actualmente implementada en su versión estable `v1.3.0`).
 
 El proyecto se enfoca **exclusivamente en el ecosistema de dispositivos móviles Samsung Galaxy**, especializándose en superar las particularidades de su arquitectura de cámara propietaria (proveedor HAL `vendor.samsung.hardware.camera.provider`, servicio `cameraserver` con restricción de `cameraId >= 20`, tabla interna `ShootingModeMap` y capa One UI).
 
@@ -12,9 +12,9 @@ El proyecto se enfoca **exclusivamente en el ecosistema de dispositivos móviles
 flowchart TD
     v101["v1.0.1 (Completado)<br/>• S23+ Rescatado al 100%<br/>• UI Moderna Oscura + Icono Adaptativo<br/>• Nombres Cortos + Fichas Desplegables (▾/▴)"]
     
-    v120["v1.2.0 (Estable Actual)<br/>• Base de Datos Heurística (SamsungModelDatabase)<br/>• Escáner On-Device no bloqueante (Canary Streams)<br/>• Clasificador de salud óptica (🟢 Operativo / 🔴 Dañado / 🔒 Pro)"]
+    v120["v1.2.0 (Completado)<br/>• Base de Datos Heurística (SamsungModelDatabase)<br/>• Escáner On-Device no bloqueante (Canary Streams)<br/>• Clasificador de salud óptica (🟢 Operativo / 🔴 Dañado / 🔒 Pro)"]
     
-    v130["v1.3.0 (Selector Múltiple Dinámico & UI Builder)<br/>• Checklists dinámicos de lentes funcionales por modelo<br/>• Generación automática de botones y tarjetas adaptadas<br/>• App Shortcuts dinámicos en Launcher y Quick Settings Tile"]
+    v130["v1.3.0 (Estable Actual)<br/>• Checklists dinámicos de lentes funcionales por modelo<br/>• Generación automática de botones y tarjetas adaptadas<br/>• App Shortcuts dinámicos en Launcher y Quick Settings Tile"]
     
     v140["v1.4.0 (Base de Datos Heurística & Asistente One UI)<br/>• Base de datos ShootingModeMap para series Galaxy S, Note y Fold<br/>• Asistente guiado para fijar Ajustes para conservar (Modo Pro)<br/>• Monitor de recuperación rápida ante bloqueos de cámara"]
     
@@ -49,7 +49,7 @@ El alcance del proyecto cubre desde los primeros dispositivos Samsung con arregl
 | Versión | Alcance | Hito Principal | Dependencia de Depuración USB |
 | :--- | :--- | :--- | :--- |
 | **`v1.0.1`** | Samsung S23+ | **Completado**: Rescate IDs 56, 52, 1, 3, UI moderna oscura, icono adaptativo, tarjetas técnicas ▾/▴. | Ninguna para uso diario (solo se usó en el diagnóstico inicial). |
-| **`v1.2.0`** | Familia Samsung Galaxy | **Estable actual**: Escaneo canary on-device de sensores, base de datos heurística de modelos Samsung (`SamsungModelDatabase`), reporte visual de salud de cada lente. | Ninguna (100% en dispositivo). |
-| **`v1.3.0`** | Familia Samsung Galaxy | **Selector Múltiple & UI Dinámica**: Checkboxes de lentes, generación dinámica de botones y App Shortcuts. | Ninguna (100% en celular). |
+| **`v1.2.0`** | Familia Samsung Galaxy | **Completado**: Escaneo canary on-device de sensores, base de datos heurística de modelos Samsung (`SamsungModelDatabase`), reporte visual de salud de cada lente. | Ninguna (100% en dispositivo). |
+| **`v1.3.0`** | Familia Samsung Galaxy | **Estable actual**: Checklist interactivo de sensores (`SensorSelectionState`), UI dinámica (`DynamicUiBuilder`), App Shortcuts (`RescueShortcutManager`) y Quick Settings Tile (`CameraRescueTileService`). | Ninguna (100% en celular). |
 | **`v1.4.0`** | Familia Samsung Galaxy | **Auto-Matcher One UI**: Diccionario heurístico de modos Pro/QR por modelo y asistente de tecla lateral. | Ninguna (Base de datos pre-compilada). |
 | **`v2.0.0`** | Ecosistema Samsung (S9 a S25+) | **Universal Samsung Rescue**: Visor completo nativo, diafragma mecánico variable, zoom digital por software y video MP4. | Ninguna (Completamente autónomo). |

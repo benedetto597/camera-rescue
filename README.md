@@ -28,21 +28,22 @@ Documentación técnica completa:
 
 ---
 
-## ✨ Características Principales (`v1.2.0`)
+## ✨ Características Principales (`v1.3.0`)
 
-1. **Motor de Diagnóstico y Escáner On-Device (*Canary Testing*):**
+1. **Selector Múltiple Dinámico & UI Builder (`v1.3.0`):**
+   - **Checklist Interactivo de Sensores:** Tras el escaneo on-device, permite habilitar o deshabilitar manualmente mediante casillas (`CheckBox`) qué lentes funcionales (`🟢 Operativo` / `🔒 Modo Pro Requerido`) desea usar el usuario, persistiendo la selección en `RescuePreferences`.
+   - **Generación Adaptativa de Tarjetas (`DynamicUiBuilder`):** Reconstruye dinámicamente las tarjetas de rescate trasero (Pro, QR y Video Pro) y los botones frontales según los sensores seleccionados y las capacidades reales del modelo (por ejemplo, omitiendo menciones de Telefoto o el modo QR cuando solo se selecciona un lente auxiliar).
+   - **App Shortcuts Dinámicos (`RescueShortcutManager`):** Publica hasta 4 accesos directos dinámicos en el Launcher (`ShortcutManager`) y permite fijar atajos en la pantalla de inicio para abrir directamente el modo deseado.
+   - **Quick Settings Tile (`CameraRescueTileService`):** Mosaico nativo en la barra de Ajustes Rápidos de Android configurable desde la app, compatible con Android 11–16 (incluyendo el flujo seguro con `PendingIntent` en Android 14+ / API 34+).
+2. **Motor de Diagnóstico y Escáner On-Device (*Canary Testing*):**
    - **`SamsungModelDatabase`:** Catálogo heurístico offline que detecta automáticamente el modelo exacto del dispositivo (`Build.MODEL`, series S9 a S25 Ultra, Note, Fold/Flip y Serie A) y asigna sus sensores de hardware e IDs de bypass.
    - **`SensorScanner`:** Pruebas secuenciales no bloqueantes en un hilo de fondo dedicado (`HandlerThread`) sobre `CameraManager` para probar cada lente y aislar averías de hardware en el bus I2C o EEPROM.
    - **Clasificador Visual de Salud:** Muestra en pantalla el estado exacto de cada lente (`🟢 Operativo`, `🔴 Dañado / Error I2C`, `🔒 Modo Pro Requerido`).
-2. **Identidad Visual e Interfaz Moderna:**
-   - Botón interactivo: **`🔍 Escanear Sensores de este Galaxy`** con reporte en vivo y resumen de salud óptica.
-   - Icono adaptativo vectorial (`@mipmap/ic_launcher`) con diseño de lente óptico e insignia de rescate.
-   - Botones de acción con nombres cortos y directos (**`Tomar Selfie`**, **`Cámara Trasera Pro`**, **`Trasera Rápida (QR)`**, **`Video Trasero Pro`**) acompañados de desplegables técnicos (**`▾` / `▴`**).
 3. **Visor Frontal Nativo `Camera2` (`ID 1` y `ID 3`) Integrado:**
    - Vista previa fluida en tiempo real (`TextureView`).
-   - Conmutación instantánea entre **`ID 1` (12 MP Gran Angular)** e **`ID 3` (8.6 MP Normal)**.
+   - Conmutación dinámica entre las lentes frontales activas en el checklist (por defecto **`ID 1` 12 MP Gran Angular** e **`ID 3` 8.6 MP Normal**).
    - Disparo directo y guardado transaccional JPEG en `Pictures/S23Camera`.
-4. **Lanzador Directo Trasero 1x / 3x — Modo Pro ISP (`device 56` y `device 52`):**
+4. **Lanzador Directo Trasero — Modo Pro ISP (`device 56` y `device 52`):**
    - Abre la cámara nativa en Modo Pro (`ShootingMode 3`) y Video Pro (`ShootingMode 36`) sobre los sensores desacoplados `device 56` (1x Principal) y `device 52` (3x Telefoto), omitiendo el chequeo del sensor dañado.
 5. **Lanzador Trasero 1x vía Escáner QR + HUD Flotante (`device 56`):**
    - Abre el visor `SCAN_QR_CODE` (`device 56`) y superpone la barra flotante minimalista (`RearCaptureService`) con botón **Capturar** y selector de recorte (**Visor** vs **Completo**).
@@ -70,11 +71,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\test-local.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-local.ps1
 ```
-El APK firmado se genera en `dist/camera-rescue-v1.2.0.apk`.
+El APK firmado se genera en `dist/camera-rescue-v1.3.0.apk`.
 
 ### Instalar en el dispositivo vía ADB
 ```powershell
-adb install -r .\dist\camera-rescue-v1.2.0.apk
+adb install -r .\dist\camera-rescue-v1.3.0.apk
 ```
 
 ---
@@ -83,7 +84,7 @@ adb install -r .\dist\camera-rescue-v1.2.0.apk
 
 El workflow [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) está configurado para ejecutarse **únicamente cuando se envía un tag de versión (`v*`)**:
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.3.0
+git push origin v1.3.0
 ```
 Esto mantiene el consumo de minutos de CI en `0` durante el desarrollo normal.

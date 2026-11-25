@@ -100,6 +100,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
     private int countdownRemainingSeconds = 0;
     private boolean audioPermissionDeniedThisSession = false;
     private boolean pendingVideoRecordAfterAudioPrompt = false;
+    private VideoRecordingState.AudioMode pendingVideoRecordAudioMode = null;
 
     // Componentes del motor de diagnóstico y selector dinámico (v1.2.0 - v1.3.0)
     private SamsungModelDatabase.ModelProfile modelProfile;
@@ -645,6 +646,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         resetPreviewBtn.setLayoutParams(resetLp);
         resetPreviewBtn.setOnClickListener(v -> {
             cancelCountdown(false);
+            pendingVideoRecordAudioMode = null;
+            currentCameraOpenedSuccessfully = false;
             universalCameraController.stop();
             updateRecordingUi(false, 0L, null);
             ensureCameraPermissionAndStartViewerPreview();
@@ -1414,15 +1417,21 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         }
         String trimmedId = cameraId.trim();
         cancelCountdown(false);
+        pendingVideoRecordAudioMode = null;
         viewerPreferredCameraId = trimmedId;
         currentCameraOpenedSuccessfully = false;
         pendingApplySavedFlash = true;
         pendingApplySavedAperture = true;
 
-        if (viewerPreviewView != null && viewerPreviewView.isAvailable()) {
+        boolean hasCameraPermission =
+                checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        if (hasCameraPermission && viewerPreviewView != null && viewerPreviewView.isAvailable()) {
             universalCameraController.switchToCameraId(trimmedId, viewerPreviewView, getDisplayRotationCompat());
         } else {
             universalCameraController.setCurrentCameraId(trimmedId);
+            if (!hasCameraPermission) {
+                ensureCameraPermissionAndStartViewerPreview();
+            }
         }
         updateViewerLensLabels(trimmedId);
         if (persistPreference) {
@@ -2209,6 +2218,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
 
     private void launchRearModeViaMap(ShootingModeMap.ModeKind kind) {
         cancelCountdown(false);
+        pendingVideoRecordAudioMode = null;
+        currentCameraOpenedSuccessfully = false;
         universalCameraController.closeCameraOnly();
         updateRecordingUi(false, 0L, null);
         ShootingModeMap.ModeDescriptor descriptor = ShootingModeMap.resolve(modelProfile, oneUiGeneration, kind);
@@ -2239,6 +2250,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         }
 
         cancelCountdown(false);
+        pendingVideoRecordAudioMode = null;
+        currentCameraOpenedSuccessfully = false;
         universalCameraController.closeCameraOnly();
         updateRecordingUi(false, 0L, null);
         service.showHud();
@@ -2267,6 +2280,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
 
         if (plan.shouldResetLocalSession) {
             cancelCountdown(false);
+            pendingVideoRecordAudioMode = null;
+            currentCameraOpenedSuccessfully = false;
             universalCameraController.stop();
             updateRecordingUi(false, 0L, null);
             RearCaptureService service = RearCaptureService.getInstance();
@@ -2396,6 +2411,8 @@ public final class MainActivity extends Activity implements UniversalCameraContr
     @Override
     protected void onPause() {
         cancelCountdown(false);
+        pendingVideoRecordAudioMode = null;
+        currentCameraOpenedSuccessfully = false;
         universalCameraController.stop();
         updateRecordingUi(false, 0L, null);
         super.onPause();
@@ -2425,6 +2442,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 universalCameraController.start(viewerPreviewView, getDisplayRotationCompat());
             } else {
+                pendingVideoRecordAudioMode = null;
                 onError("Permiso de cámara requerido para probar sensores y visor Camera2.");
             }
         } else if (requestCode == REQUEST_AUDIO_PERMISSION) {
@@ -2441,7 +2459,11 @@ public final class MainActivity extends Activity implements UniversalCameraContr
                 onStatusChanged(msg);
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
             }
-            universalCameraController.startVideoRecording(getDisplayRotationCompat(), mode);
+            if (currentCameraOpenedSuccessfully) {
+                universalCameraController.startVideoRecording(getDisplayRotationCompat(), mode);
+            } else {
+                pendingVideoRecordAudioMode = mode;
+            }
         }
     }
 
@@ -2458,6 +2480,14 @@ public final class MainActivity extends Activity implements UniversalCameraContr
             statusBanner.setTextColor(Color.parseColor("#34D399"));
             statusBanner.setText("● " + message);
         }
+        if (message != null && message.startsWith("Activa:")) {
+            currentCameraOpenedSuccessfully = true;
+            if (pendingVideoRecordAudioMode != null) {
+                VideoRecordingState.AudioMode mode = pendingVideoRecordAudioMode;
+                pendingVideoRecordAudioMode = null;
+                universalCameraController.startVideoRecording(getDisplayRotationCompat(), mode);
+            }
+        }
     }
 
     @Override
@@ -2465,7 +2495,6 @@ public final class MainActivity extends Activity implements UniversalCameraContr
         if (capabilities == null) {
             return;
         }
-        currentCameraOpenedSuccessfully = true;
 
         if (pendingApplySavedFlash) {
             pendingApplySavedFlash = false;
@@ -2538,6 +2567,7 @@ public final class MainActivity extends Activity implements UniversalCameraContr
 
     @Override
     public void onError(String error) {
+        pendingVideoRecordAudioMode = null;
         String activeId = (universalCameraController != null)
                 ? universalCameraController.getCurrentCameraId()
                 : CameraConfig.FRONT_CAMERA_WIDE_ID;

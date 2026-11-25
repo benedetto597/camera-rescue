@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Rescue Cam: Sensor Recovery</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --surface: #121923;
+      --surface-alt: #182230;
+      --border: #263447;
+      --text: #e6edf5;
+      --muted: #9fb0c3;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.14);
+      --ok: #34d399;
+      --ok-soft: rgba(52, 211, 153, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+      background: radial-gradient(circle at top right, #162233 0%, var(--bg) 52%);
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    header {
+      background: linear-gradient(145deg, var(--surface-alt), var(--surface));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .badge.ok {
+      background: var(--ok-soft);
+      color: var(--ok);
+      border-color: rgba(52, 211, 153, 0.35);
+    }
+
+    h1 {
+      margin: 0 0 0.4rem;
+      font-size: clamp(1.5rem, 3vw, 2.1rem);
+      line-height: 1.25;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .lang-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+
+    .lang-nav a {
+      text-decoration: none;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .lang-nav a:hover,
+    .lang-nav a:focus-visible {
+      border-color: var(--accent);
+      color: var(--accent);
+      outline: none;
+    }
+
+    section.policy-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.35rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    h3 {
+      margin: 1.35rem 0 0.45rem;
+      font-size: 1.05rem;
+      color: var(--text);
+    }
+
+    p {
+      margin: 0.5rem 0 0.85rem;
+    }
+
+    ul {
+      margin: 0.4rem 0 0.9rem;
+      padding-left: 1.25rem;
+    }
+
+    li {
+      margin-bottom: 0.4rem;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.1rem 0.4rem;
+      color: #cfe8ff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0 1rem;
+      font-size: 0.92rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-alt);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .callout {
+      background: var(--surface-alt);
+      border-left: 4px solid var(--ok);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      margin: 1rem 0;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+      margin-top: 2rem;
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 1rem 0.85rem 2.5rem;
+      }
+
+      header,
+      section.policy-section {
+        padding: 1.15rem;
+      }
+
+      table,
+      thead,
+      tbody,
+      th,
+      td,
+      tr {
+        display: block;
+      }
+
+      thead tr {
+        display: none;
+      }
+
+      tr {
+        margin-bottom: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      td {
+        border: none;
+        border-bottom: 1px solid var(--border);
+      }
+
+      td:last-child {
+        border-bottom: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <div class="badge-row">
+        <span class="badge ok">100% offline</span>
+        <span class="badge ok">No data collected</span>
+        <span class="badge">v2.1.0 · API 36</span>
+      </div>
+      <h1>Privacy Policy · Política de Privacidad</h1>
+      <p class="subtitle">
+        App: <strong>Rescue Cam: Sensor Recovery</strong> ·
+        Application ID: <code>io.github.benedetto597.rescuecam</code> ·
+        Effective Date / Vigencia: 2026-11-25
+      </p>
+      <nav class="lang-nav" aria-label="Language navigation">
+        <a href="#en">English</a>
+        <a href="#es">Español</a>
+      </nav>
+    </header>
+
+    <section id="en" class="policy-section" lang="en">
+      <h2>English — Privacy Policy</h2>
+
+      <div class="callout">
+        <strong>Summary:</strong> <strong>Rescue Cam: Sensor Recovery</strong> (<code>io.github.benedetto597.rescuecam</code>) is a <strong>100% offline</strong> local hardware utility. <strong>No data collected.</strong> <strong>No data shared with third parties.</strong> The app includes zero analytics, zero telemetry, zero third-party tracking SDKs, zero <code>INTERNET</code> permission, and zero <code>AccessibilityService</code>.
+      </div>
+
+      <h3>1. Zero Data Collection &amp; Zero Data Sharing</h3>
+      <ul>
+        <li><strong>No data collected:</strong> We do not collect, transmit, store on external servers, or sell personal data, usage metrics, crash telemetry, device identifiers, photos, videos, or audio.</li>
+        <li><strong>No data shared with third parties:</strong> Because the application is 100% offline and does not declare <code>android.permission.INTERNET</code>, no data can leave your device through the app.</li>
+        <li><strong>Zero tracking &amp; zero Accessibility API:</strong> There are no analytics libraries, no advertising trackers, and no <code>BIND_ACCESSIBILITY_SERVICE</code> components.</li>
+      </ul>
+
+      <h3>2. Android Permissions Breakdown</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>Status</th>
+            <th>Strict Local Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>android.permission.CAMERA</code></td>
+            <td>Runtime (Required for viewfinder &amp; test)</td>
+            <td>Runs the local Camera2 viewfinder and performs on-device sensor canary probing to verify functional physical/logical cameras.</td>
+          </tr>
+          <tr>
+            <td><code>android.permission.RECORD_AUDIO</code></td>
+            <td>Runtime (Optional)</td>
+            <td>Requested only when the user starts MP4 video recording in the integrated Camera2 viewer. If denied, recording cleanly degrades to video-only MP4 without audio.</td>
+          </tr>
+          <tr>
+            <td><code>android.permission.BIND_QUICK_SETTINGS_TILE</code></td>
+            <td>System Tile Binding</td>
+            <td>Allows the user to optionally add a Quick Settings shortcut tile to launch the app. Does not access user data or run background network tasks.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <strong>Explicitly omitted permissions:</strong> The manifest does <strong>not</strong> declare <code>android.permission.INTERNET</code>, <code>android.permission.READ_EXTERNAL_STORAGE</code>, <code>android.permission.WRITE_EXTERNAL_STORAGE</code>, <code>android.permission.MANAGE_EXTERNAL_STORAGE</code>, <code>android.permission.READ_MEDIA_IMAGES</code>, <code>android.permission.READ_MEDIA_VIDEO</code>, or <code>android.permission.BIND_ACCESSIBILITY_SERVICE</code>.
+      </p>
+
+      <h3>3. Local Device Storage Only</h3>
+      <p>All app state and user-created files remain strictly on your device:</p>
+      <ul>
+        <li><strong>Preferences:</strong> Local <code>SharedPreferences</code> file named <code>camera_rescue_prefs</code> (stores selected sensor defaults, UI toggles, and diagnostic counters; excluded from cloud backup via <code>android:allowBackup="false"</code>).</li>
+        <li><strong>Media Output:</strong> Photos and videos captured inside the integrated Camera2 viewer are saved locally via Android <code>MediaStore</code> to <code>Pictures/RescueCam</code> (JPEG) and <code>Movies/RescueCam</code> (MP4).</li>
+        <li><strong>Offline Diagnostic Profiles:</strong> Users may optionally export or import diagnostic configuration profiles as local <code>.json</code> files using the Android Storage Access Framework (SAF) file picker.</li>
+      </ul>
+
+      <h3>4. Data Deletion Instructions</h3>
+      <ul>
+        <li><strong>App preferences &amp; diagnostics:</strong> Open Android <em>Settings &rarr; Apps &rarr; Rescue Cam: Sensor Recovery &rarr; Storage &rarr; Clear storage</em>, or uninstall the application.</li>
+        <li><strong>Captured media &amp; exported profiles:</strong> Delete JPEG/MP4 files from <code>Pictures/RescueCam</code> or <code>Movies/RescueCam</code> via your device Gallery/Files app, and delete any user-saved <code>.json</code> profile files manually.</li>
+      </ul>
+
+      <h3>5. Independent Utility &amp; Trademark Disclaimer</h3>
+      <p>
+        <strong>Rescue Cam: Sensor Recovery</strong> is an independent utility tool. It is not affiliated with, authorized, endorsed, sponsored by, or connected with <strong>Samsung Electronics Co., Ltd.</strong> The terms &ldquo;Samsung&rdquo;, &ldquo;Galaxy&rdquo;, and &ldquo;One UI&rdquo; are used solely for descriptive technical hardware-compatibility purposes.
+      </p>
+
+      <h3>6. Contact &amp; Support</h3>
+      <p>
+        Questions, bug reports, or privacy inquiries can be submitted via the official public issue tracker:<br>
+        <a href="https://github.com/benedetto597/camera-rescue/issues">https://github.com/benedetto597/camera-rescue/issues</a>
+      </p>
+    </section>
+
+    <section id="es" class="policy-section" lang="es">
+      <h2>Español — Política de Privacidad</h2>
+
+      <div class="callout">
+        <strong>Resumen:</strong> <strong>Rescue Cam: Sensor Recovery</strong> (<code>io.github.benedetto597.rescuecam</code>) es una utilidad de hardware local <strong>100% offline</strong>. <strong>No recopila datos</strong> (<em>No data collected</em>) ni <strong>comparte datos con terceros</strong> (<em>No data shared with third parties</em>). No contiene analíticas, telemetría, rastreadores publicitarios, permiso <code>INTERNET</code> ni <code>AccessibilityService</code>.
+      </div>
+
+      <h3>1. Cero Recopilación y Cero Compartición de Datos</h3>
+      <ul>
+        <li><strong>Sin recopilación de datos:</strong> La aplicación no recopila, transmite, almacena en servidores externos ni comercializa datos personales, métricas de uso, registros de fallos, identificadores del dispositivo, fotos, videos ni audio.</li>
+        <li><strong>Sin compartición con terceros:</strong> Al operar 100% offline y no declarar <code>android.permission.INTERNET</code>, ningún dato puede salir del dispositivo mediante la aplicación.</li>
+        <li><strong>Cero rastreadores y cero API de Accesibilidad:</strong> No integra SDKs de analítica ni publicidad, y no declara <code>BIND_ACCESSIBILITY_SERVICE</code>.</li>
+      </ul>
+
+      <h3>2. Desglose Exacto de Permisos</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Permiso</th>
+            <th>Estado</th>
+            <th>Uso Local Estricto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>android.permission.CAMERA</code></td>
+            <td>Tiempo de ejecución (requerido para visor y prueba)</td>
+            <td>Ejecuta el visor local Camera2 y las pruebas canario locales de sensores en el propio dispositivo.</td>
+          </tr>
+          <tr>
+            <td><code>android.permission.RECORD_AUDIO</code></td>
+            <td>Tiempo de ejecución (opcional)</td>
+            <td>Solo se solicita cuando el usuario inicia grabación de video MP4. Si se deniega, la grabación degrada de forma segura a MP4 solo de video sin audio.</td>
+          </tr>
+          <tr>
+            <td><code>android.permission.BIND_QUICK_SETTINGS_TILE</code></td>
+            <td>Acceso rápido del sistema</td>
+            <td>Permite añadir un mosaico opcional en Ajustes Rápidos para abrir la app; no recopila datos ni ejecuta conexiones de red.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <strong>Permisos explícitamente ausentes:</strong> No se declaran <code>android.permission.INTERNET</code>, <code>android.permission.READ_EXTERNAL_STORAGE</code>, <code>android.permission.WRITE_EXTERNAL_STORAGE</code>, <code>android.permission.MANAGE_EXTERNAL_STORAGE</code>, <code>android.permission.READ_MEDIA_IMAGES</code>, <code>android.permission.READ_MEDIA_VIDEO</code> ni <code>android.permission.BIND_ACCESSIBILITY_SERVICE</code>.
+      </p>
+
+      <h3>3. Almacenamiento Exclusivamente Local en el Dispositivo</h3>
+      <ul>
+        <li><strong>Preferencias:</strong> Archivo local de <code>SharedPreferences</code> llamado <code>camera_rescue_prefs</code> (guarda preferencias de sensores e indicadores de diagnóstico; excluido de copias automáticas mediante <code>android:allowBackup="false"</code>).</li>
+        <li><strong>Archivos multimedia:</strong> Las capturas realizadas en el visor Camera2 integrado se guardan localmente mediante <code>MediaStore</code> en <code>Pictures/RescueCam</code> (JPEG) y <code>Movies/RescueCam</code> (MP4).</li>
+        <li><strong>Perfiles offline en JSON:</strong> El usuario puede exportar o importar manualmente perfiles de configuración <code>.json</code> offline mediante el selector de archivos del sistema (Android Storage Access Framework, SAF).</li>
+      </ul>
+
+      <h3>4. Instrucciones de Eliminación de Datos</h3>
+      <ul>
+        <li><strong>Preferencias y diagnósticos:</strong> Ve a <em>Ajustes &rarr; Aplicaciones &rarr; Rescue Cam: Sensor Recovery &rarr; Almacenamiento &rarr; Borrar datos</em>, o desinstala la aplicación.</li>
+        <li><strong>Fotos, videos y perfiles JSON:</strong> Elimina los archivos locales en <code>Pictures/RescueCam</code>, <code>Movies/RescueCam</code> o las copias <code>.json</code> exportadas desde tu aplicación de Galería o Archivos.</li>
+      </ul>
+
+      <h3>5. Aviso Legal de Independencia y Marcas</h3>
+      <p>
+        Rescue Cam es una herramienta de utilidad independiente. No está afiliada, autorizada, respaldada ni conectada con <strong>Samsung Electronics Co., Ltd.</strong> Los términos &ldquo;Samsung&rdquo;, &ldquo;Galaxy&rdquo; y &ldquo;One UI&rdquo; se utilizan únicamente con fines descriptivos de compatibilidad técnica de hardware.
+      </p>
+
+      <h3>6. Contacto y Soporte</h3>
+      <p>
+        Para consultas técnicas o de privacidad, utiliza el repositorio oficial:<br>
+        <a href="https://github.com/benedetto597/camera-rescue/issues">https://github.com/benedetto597/camera-rescue/issues</a>
+      </p>
+    </section>
+
+    <footer>
+      Rescue Cam: Sensor Recovery · <code>io.github.benedetto597.rescuecam</code> · 100% offline · No data collected
+    </footer>
+  </main>
+</body>
+</html>

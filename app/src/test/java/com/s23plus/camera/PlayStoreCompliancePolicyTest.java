@@ -1,5 +1,10 @@
 package com.s23plus.camera;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -22,7 +27,8 @@ public final class PlayStoreCompliancePolicyTest {
         testPrivacyUrlAndDisclaimerValidation();
         testLegacyMediaPathsRejected();
         testOfflineDataSafetySummaryInvariants();
-        System.out.println("PASS: Todas las pruebas unitarias de PlayStoreCompliancePolicyTest finalizaron con exito (10/10).");
+        testWorkspaceArtifactsMeetPlayStorePolicy();
+        System.out.println("PASS: Todas las pruebas unitarias de PlayStoreCompliancePolicyTest finalizaron con exito (11/11).");
     }
 
     private static PlayStoreCompliancePolicy.ManifestSnapshot validBaselineSnapshot() {
@@ -259,6 +265,96 @@ public final class PlayStoreCompliancePolicyTest {
                 "privacyPolicyUrl debe coincidir con CameraConfig");
         assertEquals(CameraConfig.TRADEMARK_DISCLAIMER, summary.trademarkDisclaimer,
                 "trademarkDisclaimer debe coincidir con CameraConfig");
+    }
+
+    private static void testWorkspaceArtifactsMeetPlayStorePolicy() {
+        Path repoRoot = resolveRepoRoot();
+        assertTrue(repoRoot != null, "No se pudo localizar la raiz del repositorio con app/src/main/AndroidManifest.xml");
+
+        Path manifestPath = repoRoot.resolve("app/src/main/AndroidManifest.xml");
+        Path gradlePath = repoRoot.resolve("app/build.gradle.kts");
+        Path privacyPolicyPath = repoRoot.resolve("docs/privacy-policy.html");
+
+        assertTrue(Files.exists(manifestPath), "Debe existir app/src/main/AndroidManifest.xml");
+        assertTrue(Files.exists(gradlePath), "Debe existir app/build.gradle.kts");
+        assertTrue(Files.exists(privacyPolicyPath), "Debe existir docs/privacy-policy.html");
+
+        String manifest = readUtf8(manifestPath);
+        assertFalse(manifest.contains("BIND_ACCESSIBILITY_SERVICE"),
+                "AndroidManifest.xml no debe declarar BIND_ACCESSIBILITY_SERVICE");
+        assertFalse(manifest.contains("RearCaptureService"),
+                "AndroidManifest.xml no debe referenciar RearCaptureService");
+        assertFalse(manifest.contains("android.permission.INTERNET"),
+                "AndroidManifest.xml no debe declarar android.permission.INTERNET");
+        assertFalse(manifest.contains("READ_EXTERNAL_STORAGE"),
+                "AndroidManifest.xml no debe declarar READ_EXTERNAL_STORAGE");
+        assertFalse(manifest.contains("WRITE_EXTERNAL_STORAGE"),
+                "AndroidManifest.xml no debe declarar WRITE_EXTERNAL_STORAGE");
+        assertFalse(manifest.contains("MANAGE_EXTERNAL_STORAGE"),
+                "AndroidManifest.xml no debe declarar MANAGE_EXTERNAL_STORAGE");
+        assertFalse(manifest.contains("screenOrientation=\"portrait\""),
+                "AndroidManifest.xml no debe bloquear screenOrientation=\"portrait\"");
+        assertFalse(manifest.contains("Samsung Camera Rescue"),
+                "AndroidManifest.xml no debe contener la marca heredada Samsung Camera Rescue");
+
+        assertTrue(manifest.contains("android:allowBackup=\"false\""),
+                "AndroidManifest.xml debe declarar android:allowBackup=\"false\"");
+        assertTrue(manifest.contains("Rescue Cam: Sensor Recovery"),
+                "AndroidManifest.xml debe declarar la etiqueta Rescue Cam: Sensor Recovery");
+        assertTrue(manifest.contains("android.permission.CAMERA"),
+                "AndroidManifest.xml debe declarar android.permission.CAMERA");
+        assertTrue(manifest.contains("com.s23plus.camera.MainActivity"),
+                "AndroidManifest.xml debe declarar com.s23plus.camera.MainActivity");
+
+        String gradle = readUtf8(gradlePath);
+        assertTrue(gradle.contains("applicationId = \"io.github.benedetto597.rescuecam\""),
+                "app/build.gradle.kts debe configurar applicationId = \"io.github.benedetto597.rescuecam\"");
+        assertTrue(gradle.contains("compileSdk = 36"),
+                "app/build.gradle.kts debe configurar compileSdk = 36");
+        assertTrue(gradle.contains("targetSdk = 36"),
+                "app/build.gradle.kts debe configurar targetSdk = 36");
+        assertTrue(gradle.contains("versionCode = 7"),
+                "app/build.gradle.kts debe configurar versionCode = 7");
+        assertTrue(gradle.contains("versionName = \"2.1.0\""),
+                "app/build.gradle.kts debe configurar versionName = \"2.1.0\"");
+        assertTrue(gradle.contains("isMinifyEnabled = true"),
+                "app/build.gradle.kts debe habilitar isMinifyEnabled = true");
+        assertTrue(gradle.contains("isShrinkResources = true"),
+                "app/build.gradle.kts debe habilitar isShrinkResources = true");
+        assertFalse(gradle.contains("signingConfigs.getByName(\"debug\")"),
+                "app/build.gradle.kts no debe usar signingConfigs.getByName(\"debug\") en release");
+
+        String privacyPolicy = readUtf8(privacyPolicyPath);
+        assertTrue(!privacyPolicy.trim().isEmpty(), "docs/privacy-policy.html no debe estar vacio");
+        assertTrue(privacyPolicy.contains("io.github.benedetto597.rescuecam"),
+                "docs/privacy-policy.html debe incluir io.github.benedetto597.rescuecam");
+        assertTrue(privacyPolicy.contains("Rescue Cam: Sensor Recovery"),
+                "docs/privacy-policy.html debe incluir Rescue Cam: Sensor Recovery");
+        assertTrue(privacyPolicy.contains("Samsung Electronics Co., Ltd."),
+                "docs/privacy-policy.html debe incluir Samsung Electronics Co., Ltd.");
+        assertTrue(privacyPolicy.contains("100% offline"),
+                "docs/privacy-policy.html debe declarar 100% offline");
+        assertTrue(privacyPolicy.contains("No data collected"),
+                "docs/privacy-policy.html debe declarar No data collected");
+    }
+
+    private static Path resolveRepoRoot() {
+        Path current = Paths.get("").toAbsolutePath().normalize();
+        for (int i = 0; i < 5 && current != null; i++) {
+            if (Files.exists(current.resolve("app/src/main/AndroidManifest.xml"))) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    private static String readUtf8(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new AssertionError("No se pudo leer archivo requerido: " + path, e);
+        }
     }
 
     private static void assertUnmodifiableSet(Set<String> set, String message) {
